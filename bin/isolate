@@ -1,0 +1,27 @@
+#!/bin/bash
+
+_usage() {
+  cat <<EOF
+Usage: isolate WORKDIR SUBROOTDIR CMD ARG1 ... ARGN
+EOF
+}
+
+finish() {
+  umount "${TMPDIR}/mnt"
+  rm -rf "${TMPDIR}"
+}
+trap finish EXIT
+
+set -e
+
+# Check arg count
+# Check user 0
+
+TMPDIR="$(mktemp -d)"
+WORKDIR="${1}"
+SUBROOT="${2}"
+
+mkdir -p "${TMPDIR}/wrk" "${TMPDIR}/mnt"
+shift; shift
+mount -t overlay overlay -oupperdir="${WORKDIR}",lowerdir="${SUBROOT}",workdir="${TMPDIR}/wrk" "${TMPDIR}/mnt"
+chroot "${TMPDIR}/mnt" $@
