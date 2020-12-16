@@ -1,0 +1,15 @@
+#!/bin/bash
+
+(
+mkdir -p "${f_prefix}"
+rsync -av "${f_cache}/" "${f_prefix}/"
+) | chaser "${LVLBAR} ${ORANGE}[${GREEN}=====--${ORANGE}] Syncing '${1}'${NONE}"
+
+echo -ne "\r${LVLBAR} ${ORANGE}[${GREEN}======-${ORANGE}] Updating locks for '${1}'${NONE}"
+cat <<EOF >"${f_meta}"
+[metadata ${1}]
+hash=${curr_hash}
+tag=${f_tag}
+EOF
+
+echo -e "\r${LVLBAR} ${ORANGE}[${GREEN}=======${ORANGE}] Done with '${1}'${NONE}"

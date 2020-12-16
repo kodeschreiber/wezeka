@@ -1,0 +1,3 @@
+#!/bin/bash
+
+rm -rf "${f_cache}" "${f_meta}" "${f_module}"

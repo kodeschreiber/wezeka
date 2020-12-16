@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# _build <resource>
+
+mkdir -p "${f_moddir}"
+
+wzk-sekt -e -q -t 'exec' "${CONFIG}" $f_exec > "${f_script_file}"
+chmod +x "${f_script_file}"
+curr_hash="$(md5sum "${f_script_file}" | head -c32)"
+
+_depcheck
+
+if [ $? -ne 13 ]; then
+  _sync
+fi
+
+env - $(wzk-sekt -e -q -t 'env' "${CONFIG}" default_factor_values $@ | xargs) \
+    -C "${f_module}" "${f_script_file}" | \
+    chaser "${LVLBAR} ${ORANGE}[${GREEN}====---${ORANGE}] Building '${1}'${NONE}"
+@einz "Failed to build package ${1}"
+
+_wrapup
+
+set +e
+return 11

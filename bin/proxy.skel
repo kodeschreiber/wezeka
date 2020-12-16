@@ -1,0 +1,25 @@
+#!/bin/bash
+
+base="$(basename "${0}")"
+
+#usage ../docs/proxy.md
+
+_usage_cmd() {
+  cat <<EOF
+#file ../docs/proxy-cmd.md
+EOF
+}
+
+if [ "${base}" == "proxy" ]; then
+  _usage
+  exit 0
+fi
+
+cmd="${0}-${1}"
+if ! which "$cmd" >/dev/null; then
+  echo "No such command: ${1}"
+  _usage_cmd
+  exit 1
+fi
+
+$cmd ${@:2}

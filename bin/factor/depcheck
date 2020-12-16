@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set +e
+deprebuilt=0
+
+source <(wzk-sekt -e -q -p 'lock_' -t 'metadata' "${1}")
+
+echo -e "${LVLBAR} ${ORANGE}[${GREEN}-------${ORANGE}] Checking dependencies of '${1}'${NONE}"
+
+while read req; do
+  if [ -z "${req}" ]; then continue; fi
+  LEVEL=$(($LEVEL + 1)) $0 build "${req}"
+  @e "Requirement '${req}' for resource '${1}' failed to build";
+  case $? in
+    12) continue; ;;
+    11) deprebuilt=1; ;;
+    *) exit 1; ;;
+  esac
+done < <(echo "${f_requires}" | sed 's/ /\n/g')
+
+if [ -z "${f_url}" ]; then
+  return 13
+fi
+
+set -e
+if [ $deprebuilt -ne 1 -a -d "${f_cache}" -a \
+  "${curr_hash}" == "${lock_hash}" -a "${f_tag}" == "${lock_tag}" ]; then
+  _wrapup
+  exit 12
+fi
