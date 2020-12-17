@@ -1,16 +1,16 @@
 #!/bin/bash
 
-set -e
 trap 'rm -rf "${TMPDIR}"' EXIT
 
 TMPDIR="$(mktemp -d)"
 CONFIG="${TMPDIR}/config"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 FACTDIR="${GIT_ROOT}/.factor"
-LEVEL="${LEVEL:-0}"
-LVLBAR="$(printf '|%.0s' {1..$LEVEL})"
+LEVEL="${LEVEL:-1}"
+LVLBAR="$(printf "%${LEVEL}s" | sed 's/ /|/g')"
+BARMAX=7
 
-#file ./log
+#file ./factor/log
 
 #usage ../docs/factor.md
 
@@ -23,6 +23,8 @@ LVLBAR="$(printf '|%.0s' {1..$LEVEL})"
 #hfunc ./factor/sync
 
 #hfunc ./factor/wrapup
+
+#hfunc ./factor/interflat
 
 #hfunc ./factor/build
 
@@ -44,6 +46,9 @@ OPER="${1}"
 shift
 
 while [ $# -gt 0 ]; do
+  if [ $(wzk-sekt -e -q -t 'entry' "${CONFIG}" "${1}" | wc -l) -lt 1 ]; then
+    @e "Entry '${1}' is not a valid entry"
+  fi
   _get_resource "${1}"
   case "${OPER}" in
     build) _build "${1}"; exit $?; ;;

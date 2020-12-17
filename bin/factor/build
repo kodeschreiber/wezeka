@@ -1,25 +1,28 @@
 #!/bin/bash
 
 # _build <resource>
-
 mkdir -p "${f_moddir}"
 
-wzk-sekt -e -q -t 'exec' "${CONFIG}" $f_exec > "${f_script_file}"
+cat <<EOF >"${f_script_file}"
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${f_entry_conf}" default_factor_env)
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${CONFIG}" $f_env)
+# BEGIN SCRIPT
+EOF
+wzk-sekt -n -t 'exec' "${CONFIG}" $f_exec >> "${f_script_file}"
 chmod +x "${f_script_file}"
 curr_hash="$(md5sum "${f_script_file}" | head -c32)"
 
-_depcheck
-
+_depcheck "${1}"
 if [ $? -ne 13 ]; then
-  _sync
+  _sync "${1}"
 fi
 
-env - $(wzk-sekt -e -q -t 'env' "${CONFIG}" default_factor_values $@ | xargs) \
-    -C "${f_module}" "${f_script_file}" | \
-    chaser "${LVLBAR} ${ORANGE}[${GREEN}====---${ORANGE}] Building '${1}'${NONE}"
+(
+env -C "${f_module}" -i "${f_script_file}" 2>&1 | @v "$(@s "${1}" 4 "Building")"
+exit ${PIPESTATUS[0]}
+)
 @einz "Failed to build package ${1}"
 
-_wrapup
+_wrapup "${1}"
 
-set +e
 return 11

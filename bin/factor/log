@@ -1,0 +1,51 @@
+#!/bin/bash
+
+NONE="\033[0m"
+ORANGE="\033[0;33m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+GRAY="\033[0;37m"
+
+exec 3>&1 4>&2
+
+@p() {
+  echo -e "${LVLBAR}\033[0;32m- ${@}\033[0m"
+}
+
+@e() {
+  echo -e "${LVLBAR}\033[0;31m! ${@}\033[0m" >&4
+  exit 1
+}
+
+@d() {
+  echo -e "\033[1;34m? ${@}\033[0m" >&3
+}
+
+@einz() {
+  if [ $? -ne 0 ]; then
+    @e $@
+  fi
+}
+
+# @s <entry> <progress> <status> <clear>
+@s() {
+  if [ ! -z "${4}" ]; then
+    printf "\r%*s\r" $COLUMNS
+  fi
+  echo -ne "${LVLBAR} ${GRAY}${1} ${ORANGE}[${GREEN}$(printf "%${2}s" | sed 's/ /=/g')$(printf "%$(($BARMAX - ${2}))s" | sed 's/ /-/g')${ORANGE}] ${3}${NONE}"
+}
+
+# f_verbose='' @v <normal_string>
+@v() {
+  if [ "${f_verbose}" == "true" ]; then
+    wzk-chaser "${1}"
+  else
+    echo "${1}"
+    cat 2>&1 >/dev/null
+  fi
+}
+
+DEBUG="${DEBUG:-}"
+#BARMAX=-1
+shopt -s extdebug
+test ! -z $DEBUG && trap '@d ${BASH_COMMAND}' DEBUG

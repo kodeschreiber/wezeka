@@ -1,14 +1,14 @@
 #!/bin/bash
 
-set -e
 trap 'rm -rf "${TMPDIR}"' EXIT
 
 TMPDIR="$(mktemp -d)"
 CONFIG="${TMPDIR}/config"
 GIT_ROOT="$(git rev-parse --show-toplevel)"
 FACTDIR="${GIT_ROOT}/.factor"
-LEVEL="${LEVEL:-0}"
-LVLBAR="$(printf '|%.0s' {1..$LEVEL})"
+LEVEL="${LEVEL:-1}"
+LVLBAR="$(printf "%${LEVEL}s" | sed 's/ /|/g')"
+BARMAX=7
 
 #!/bin/bash
 
@@ -16,19 +16,21 @@ NONE="\033[0m"
 ORANGE="\033[0;33m"
 RED="\033[0;31m"
 GREEN="\033[0;32m"
+GRAY="\033[0;37m"
 
+exec 3>&1 4>&2
 
 @p() {
   echo -e "${LVLBAR}\033[0;32m- ${@}\033[0m"
 }
 
 @e() {
-  echo -e "${LVLBAR}\033[0;31m! ${@}\033[0m" >&2
+  echo -e "${LVLBAR}\033[0;31m! ${@}\033[0m" >&4
   exit 1
 }
 
 @d() {
-  echo -e "\033[1;34m? ${@}\033[0m"
+  echo -e "\033[1;34m? ${@}\033[0m" >&3
 }
 
 @einz() {
@@ -37,7 +39,26 @@ GREEN="\033[0;32m"
   fi
 }
 
+# @s <entry> <progress> <status> <clear>
+@s() {
+  if [ ! -z "${4}" ]; then
+    printf "\r%*s\r" $COLUMNS
+  fi
+  echo -ne "${LVLBAR} ${GRAY}${1} ${ORANGE}[${GREEN}$(printf "%${2}s" | sed 's/ /=/g')$(printf "%$(($BARMAX - ${2}))s" | sed 's/ /-/g')${ORANGE}] ${3}${NONE}"
+}
+
+# f_verbose='' @v <normal_string>
+@v() {
+  if [ "${f_verbose}" == "true" ]; then
+    wzk-chaser "${1}"
+  else
+    echo "${1}"
+    cat 2>&1 >/dev/null
+  fi
+}
+
 DEBUG="${DEBUG:-}"
+#BARMAX=-1
 shopt -s extdebug
 test ! -z $DEBUG && trap '@d ${BASH_COMMAND}' DEBUG
 
@@ -156,7 +177,7 @@ _compose_config(){
 #!/bin/bash
 
 find "${GIT_ROOT}" -not \( -path "${GIT_ROOT}/.factor" -prune \) \
-     -type f -name *.ftr -exec cat {} + > "${CONFIG}"
+     -type f -name '*.ftr' -exec cat {} + > "${CONFIG}"
 cat <<"EOF" >>"${CONFIG}"
 [entry default_factor_values]
 tag=master
@@ -171,17 +192,25 @@ _get_resource(){
 #!/bin/bash
 
 # _get_resource <resource>
-wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "default_factor_values"
 
+set -a
 source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "default_factor_values")
 source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "factor")
+cat <<EOF >>"${CONFIG}"
+[entry ${1}_defaults]
+env=${f_env} ${1}
+exec=${1}
+EOF
+source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "${1}_defaults")
+ENV="${f_env}"
 source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "${1}")
+set +a
 
 # test ! -z "${f_url}"
 # @einz "No url defined for ${1}"
 test ! -z "${f_prefix}"
 @einz "No prefix provided for ${1}"
-test ! -z "${f_script}"
+test ! -z "${f_exec}"
 @einz "No script sections specified for ${1}"
 
 f_moddir="${FACTDIR}/${1}"
@@ -193,47 +222,61 @@ f_rmodule="${RFACTDIR}/${1}/module"
 f_script_file="${TMPDIR}/${1}.sh"
 f_entry_conf="${TMPDIR}/${1}.conf"
 
+if [ -z "${f_url}" ]; then  # For execute-only situations
+  f_module="${f_prefix}"
+fi
+
 cat <<EOF >"${f_entry_conf}"
-[env default_factor_values]
+[env default_factor_env]
 PREFIX_CACHE="${f_cache}"
 PREFIX_BUILD="${f_prefix}"
 GIT_ROOT="${GIT_ROOT}"
-
-[entry ${1}_defaults]
-env=${f_env} ${1}
-exec=${1}
 EOF
 }
 
 _depcheck(){
 #!/bin/bash
 
-set +e
 deprebuilt=0
+pass="${GREEN}✔${NONE}"
+fail="${RED}✗${NONE}"
 
-source <(wzk-sekt -e -q -p 'lock_' -t 'metadata' "${1}")
+if [ ! -f "${f_meta}" ]; then touch "${f_meta}"; fi
+source <(wzk-sekt -e -q -p 'export lock_' -t 'metadata' "${f_meta}" "${1}")
 
-echo -e "${LVLBAR} ${ORANGE}[${GREEN}-------${ORANGE}] Checking dependencies of '${1}'${NONE}"
-
+@s "${1}" 0 "Checking dependencies\n"
+_iter_deps() {
 while read req; do
   if [ -z "${req}" ]; then continue; fi
-  LEVEL=$(($LEVEL + 1)) $0 build "${req}"
-  @e "Requirement '${req}' for resource '${1}' failed to build";
+  env -i PATH="${PATH}" LEVEL=$(($LEVEL + 1)) $0 build "${req}"
   case $? in
     12) continue; ;;
     11) deprebuilt=1; ;;
-    *) exit 1; ;;
+    *) @e "Requirement '${req}' for resource '${1}' failed to build"; ;;
   esac
 done < <(echo "${f_requires}" | sed 's/ /\n/g')
+}
+_iter_deps # | @v "$(@s "${1}" 0 "Checking dependencies")"
 
 if [ -z "${f_url}" ]; then
   return 13
 fi
 
-set -e
+d_deps="${fail}"
+d_cache="${fail}"
+d_script="${fail}"
+d_tag="${fail}"
+
+if [ $deprebuilt -ne 1 ]; then d_deps="${pass}"; fi
+if [ -d "${f_cache}" ]; then d_cache="${pass}"; fi
+if [ "${curr_hash}" == "${lock_hash}" ]; then d_script="${pass}"; fi
+if [ "${f_tag}" == "${lock_tag}" ]; then d_tag="${pass}"; fi
+
+echo -e "$(printf "${LVLBAR} ${ORANGE}Rebuild checks:${NONE} Depends [%s] Cache [%s] Script [%s] Tag [%s]" "${d_deps}" "${d_cache}" "${d_script}" "${d_tag}")"
+
 if [ $deprebuilt -ne 1 -a -d "${f_cache}" -a \
   "${curr_hash}" == "${lock_hash}" -a "${f_tag}" == "${lock_tag}" ]; then
-  _wrapup
+  _wrapup "${1}"
   exit 12
 fi
 }
@@ -241,99 +284,119 @@ fi
 _sync(){
 #!/bin/bash
 
-echo -ne "${LVLBAR} ${ORANGE}[${GREEN}=------${ORANGE}] Cleaning '${1}'${NONE}"
-rm -rf "${f_cache}"
-mkdir -p "${f_cache}"
+_clear_cache() {
+  rm -rf "${f_cache}"
+  mkdir -p "${f_cache}"
+}
+_clear_cache | @v "$(@s "${1}" 1 "Cleaning" clean)"
 
-(
-if [ "${f_freeze}" == "true" ]; then
-  if [ ! -f "${f_frozen}" -a ! -d "${f_module}" ]; then
-    git clone "${f_url}" -b "${f_tag}" "${f_module}"
-    @einz "Could not pull the module ${1}"
-  fi
+_handle_repo() {
+  if [ "${f_freeze}" == "true" ]; then
+    if [ ! -f "${f_frozen}" -a ! -d "${f_module}" ]; then
+      git clone "${f_url}" -b "${f_tag}" "${f_module}"
+      @einz "Could not pull the module ${1}"
+    fi
 
-  if [ ! -f "${f_frozen}" ]; then
-    (
-      cd "${f_moddir}"
-      tar zcvf "${f_frozen}" module
-    )
-    @einz "Unable to freeze repository"
-  fi
+    if [ ! -f "${f_frozen}" ]; then
+      (
+        cd "${f_moddir}"
+        tar zcvf "${f_frozen}" module
+      )
+      @einz "Unable to freeze repository"
+    fi
 
-  if [ ! -d "${f_module}" ]; then
-    (
-      cd "${f_moddir}"
-      tar zxvf "${f_frozen}"
-    )
-    @einz "Unable to thaw repository"
+    if [ ! -d "${f_module}" ]; then
+      (
+        cd "${f_moddir}"
+        tar zxvf "${f_frozen}"
+      )
+      @einz "Unable to thaw repository"
+    fi
+  else
+    if [ ! -z "${f_url}" -a ! -d "${f_module}" ]; then
+      git clone "${f_url}" -b "${f_tag}" "${f_module}"
+      @einz "Could not pull the module ${1}"
+    fi
   fi
-else
-  if [ ! -z "${f_url}" -a ! -d "${f_module}" ]; then
-    git clone "${f_url}" -b "${f_tag}" "${f_module}"
-    @einz "Could not pull the module ${1}"
-  fi
-fi
-) | chaser "${LVLBAR} ${ORANGE}[${GREEN}==-----${ORANGE}] Checking module for '${1}'${NONE}"
+}
+_handle_repo | @v "$(@s "${1}" 2 "Checking module")"
 
 pushd "${f_module}" >/dev/null
-(
-test "${GIT_ROOT}" != "$(git rev-parse --show-toplevel)"
-@einz "Refusing to build; target git directory is the parent not the submodule: '${1}'"
+_clean_repo() {
+  test "${GIT_ROOT}" != "$(git rev-parse --show-toplevel)"
+  @einz "Refusing to build; target git directory is the parent not the submodule: '${1}'"
 
-if [ "${f_freeze}" != true ]; then
-  git fetch --all >/dev/null
-  git checkout "${f_tag}" 2>/dev/null
-fi
+  if [ "${f_freeze}" != true ]; then
+    git fetch --all >/dev/null
+    git checkout "${f_tag}" 2>/dev/null
+  fi
 
-git reset --hard "${f_tag}" >/dev/null
-git clean -xfdf
-) | chaser "${LVLBAR} ${ORANGE}[${GREEN}===----${ORANGE}] Cleaning module for '${1}'${NONE}"
+  git reset --hard "${f_tag}" >/dev/null
+  git clean -xfdf
+}
+_clean_repo | @v "$(@s "${1}" 3 "Cleaning module")"
 popd >/dev/null
 }
 
 _wrapup(){
 #!/bin/bash
 
-(
-mkdir -p "${f_prefix}"
-rsync -av "${f_cache}/" "${f_prefix}/"
-) | chaser "${LVLBAR} ${ORANGE}[${GREEN}=====--${ORANGE}] Syncing '${1}'${NONE}"
+_sync_to_build() {
+  mkdir -p "${f_prefix}"
+  rsync -av "${f_cache}/" "${f_prefix}/"
+}
 
-echo -ne "\r${LVLBAR} ${ORANGE}[${GREEN}======-${ORANGE}] Updating locks for '${1}'${NONE}"
+if [ ! -z "${f_url}" ]; then
+  _sync_to_build | @v "$(@s "${1}" 5 "Syncing")"
+fi
+
+@s "${1}" 6 "Updating locks" clear
 cat <<EOF >"${f_meta}"
 [metadata ${1}]
 hash=${curr_hash}
 tag=${f_tag}
 EOF
 
-echo -e "\r${LVLBAR} ${ORANGE}[${GREEN}=======${ORANGE}] Done with '${1}'${NONE}"
+@s "${1}" 7 "Done" clear
+echo
+}
+
+_interflat(){
+#!/bin/bash
+
+while read line; do
+  echo -n "$(echo -n "${line} ")"
+done
 }
 
 _build(){
 #!/bin/bash
 
 # _build <resource>
-
 mkdir -p "${f_moddir}"
 
-wzk-sekt -e -q -t 'exec' "${CONFIG}" $f_exec > "${f_script_file}"
+cat <<EOF >"${f_script_file}"
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${f_entry_conf}" default_factor_env)
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${CONFIG}" $f_env)
+# BEGIN SCRIPT
+EOF
+wzk-sekt -n -t 'exec' "${CONFIG}" $f_exec >> "${f_script_file}"
 chmod +x "${f_script_file}"
 curr_hash="$(md5sum "${f_script_file}" | head -c32)"
 
-_depcheck
-
+_depcheck "${1}"
 if [ $? -ne 13 ]; then
-  _sync
+  _sync "${1}"
 fi
 
-env - $(wzk-sekt -e -q -t 'env' "${CONFIG}" default_factor_values $@ | xargs) \
-    -C "${f_module}" "${f_script_file}" | \
-    chaser "${LVLBAR} ${ORANGE}[${GREEN}====---${ORANGE}] Building '${1}'${NONE}"
+(
+env -C "${f_module}" -i "${f_script_file}" 2>&1 | @v "$(@s "${1}" 4 "Building")"
+exit ${PIPESTATUS[0]}
+)
 @einz "Failed to build package ${1}"
 
-_wrapup
+_wrapup "${1}"
 
-set +e
 return 11
 }
 
@@ -359,6 +422,9 @@ OPER="${1}"
 shift
 
 while [ $# -gt 0 ]; do
+  if [ $(wzk-sekt -e -q -t 'entry' "${CONFIG}" "${1}" | wc -l) -lt 1 ]; then
+    @e "Entry '${1}' is not a valid entry"
+  fi
   _get_resource "${1}"
   case "${OPER}" in
     build) _build "${1}"; exit $?; ;;

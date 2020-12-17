@@ -1,29 +1,24 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
-#include <unistd.h>
 
 int main(int argc, char* argv[]) {
   char * line = NULL;
   size_t len = 0;
-  ssize_t read;
   struct winsize w;
 
   if(argc < 1)
     exit(EXIT_FAILURE);
 
-  ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+  setvbuf(stdout, NULL, _IONBF, 0);
+  ioctl(1, TIOCGWINSZ, &w);  // 1 replacing STDOUT_FILENO from unistd.h
 
-  while ((read = getline(&line, &len, stdin)) != -1) {
-    for(int c = 0; c < w.ws_col; c++)
-      printf(" ");
-    printf("\r%s%s\r", line, argv[1]);
-    fflush(stdout);
-  }
+  while(getline(&line, &len, stdin) != -1)
+    printf("%*s\r%s%s\r", w.ws_col, "", line, argv[1]);
 
-  printf("\n");
-  if (line)
+  printf("%s\n", argv[1]);
+  if(line)
     free(line);
+
   exit(EXIT_SUCCESS);
 }

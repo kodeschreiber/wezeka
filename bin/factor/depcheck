@@ -1,30 +1,44 @@
 #!/bin/bash
 
-set +e
 deprebuilt=0
+pass="${GREEN}✔${NONE}"
+fail="${RED}✗${NONE}"
 
-source <(wzk-sekt -e -q -p 'lock_' -t 'metadata' "${1}")
+if [ ! -f "${f_meta}" ]; then touch "${f_meta}"; fi
+source <(wzk-sekt -e -q -p 'export lock_' -t 'metadata' "${f_meta}" "${1}")
 
-echo -e "${LVLBAR} ${ORANGE}[${GREEN}-------${ORANGE}] Checking dependencies of '${1}'${NONE}"
-
+@s "${1}" 0 "Checking dependencies\n"
+_iter_deps() {
 while read req; do
   if [ -z "${req}" ]; then continue; fi
-  LEVEL=$(($LEVEL + 1)) $0 build "${req}"
-  @e "Requirement '${req}' for resource '${1}' failed to build";
+  env -i PATH="${PATH}" LEVEL=$(($LEVEL + 1)) $0 build "${req}"
   case $? in
     12) continue; ;;
     11) deprebuilt=1; ;;
-    *) exit 1; ;;
+    *) @e "Requirement '${req}' for resource '${1}' failed to build"; ;;
   esac
 done < <(echo "${f_requires}" | sed 's/ /\n/g')
+}
+_iter_deps # | @v "$(@s "${1}" 0 "Checking dependencies")"
 
 if [ -z "${f_url}" ]; then
   return 13
 fi
 
-set -e
+d_deps="${fail}"
+d_cache="${fail}"
+d_script="${fail}"
+d_tag="${fail}"
+
+if [ $deprebuilt -ne 1 ]; then d_deps="${pass}"; fi
+if [ -d "${f_cache}" ]; then d_cache="${pass}"; fi
+if [ "${curr_hash}" == "${lock_hash}" ]; then d_script="${pass}"; fi
+if [ "${f_tag}" == "${lock_tag}" ]; then d_tag="${pass}"; fi
+
+echo -e "$(printf "${LVLBAR} ${ORANGE}Rebuild checks:${NONE} Depends [%s] Cache [%s] Script [%s] Tag [%s]" "${d_deps}" "${d_cache}" "${d_script}" "${d_tag}")"
+
 if [ $deprebuilt -ne 1 -a -d "${f_cache}" -a \
   "${curr_hash}" == "${lock_hash}" -a "${f_tag}" == "${lock_tag}" ]; then
-  _wrapup
+  _wrapup "${1}"
   exit 12
 fi

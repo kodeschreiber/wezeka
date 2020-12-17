@@ -1,15 +1,20 @@
 #!/bin/bash
 
-(
-mkdir -p "${f_prefix}"
-rsync -av "${f_cache}/" "${f_prefix}/"
-) | chaser "${LVLBAR} ${ORANGE}[${GREEN}=====--${ORANGE}] Syncing '${1}'${NONE}"
+_sync_to_build() {
+  mkdir -p "${f_prefix}"
+  rsync -av "${f_cache}/" "${f_prefix}/"
+}
 
-echo -ne "\r${LVLBAR} ${ORANGE}[${GREEN}======-${ORANGE}] Updating locks for '${1}'${NONE}"
+if [ ! -z "${f_url}" ]; then
+  _sync_to_build | @v "$(@s "${1}" 5 "Syncing")"
+fi
+
+@s "${1}" 6 "Updating locks" clear
 cat <<EOF >"${f_meta}"
 [metadata ${1}]
 hash=${curr_hash}
 tag=${f_tag}
 EOF
 
-echo -e "\r${LVLBAR} ${ORANGE}[${GREEN}=======${ORANGE}] Done with '${1}'${NONE}"
+@s "${1}" 7 "Done" clear
+echo
