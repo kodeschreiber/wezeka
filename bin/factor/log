@@ -37,6 +37,7 @@ exec 3>&1 4>&2
 
 # f_verbose='' @v <normal_string>
 @v() {
+  echo "$(cat /proc/$PPID/comm)" >> /tmp/factor.log
   if [ "$(cat /proc/$PPID/comm)" == "git-factor" -o "$(cat /proc/$PPID/comm)" == "wzk-factor" ]; then
     echo "${1}"
     cat 2>&1 >/dev/null
