@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#usage ../docs/argparse.md
+
+TMPDIR="$(mktemp -d)"
+
+curr_var=''
+curr_opts=''
+curr_count=0
+  
+nocontext=''  
+  
+while [ $# -gt 0 ]; do
+  case "${1}"; do
+    -v)
+      if [ ! -z "${curr_var}" ]; then
+        
+      fi
+      curr_var="${2}"
+    ;;
+    
+    -o)
+    
+    ;;
+    
+    -c)
+    
+    ;;
+    
+    -*)
+      echo "Invalid flag "${1}"" >&2
+      _usage >&2
+      exit 1
+    ;;
+    
+    *)
+      break
+    ;;
+  esac
+done

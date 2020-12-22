@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#usage ../docs/mkblk.md
+
+posargs=''
+imgsize=''
+partsize=''
+format='ext4'
+blocksize=4194304
+outfile=''
+
+wcis=256
+wcir=4096
+reser='0.05'
+
+while [ $# -gt 0 ]; do
+  case "${1}" in
+    -i) imgsize="${2}"; ;;
+    -p) partsize="${2}"; ;;
+    -f) format="${2}"; ;;
+    -b) blocksize="${2}"; ;;
+    *)  outfile="${1}"; ;;
+  esac
+  shift; shift
+done
+
+if [ ! -z "${imgsize}" -a ! -z "${partsize}" ]; then
+  echo "You must only define either an image or partition size, not both" >&2
+  exit 2
+fi
+
+if [ -z "${imgsize}" -o -z "${partsize}" ]; then
+  echo "You must only define an image or partition size" >&2
+  usage >&2
+  exit 3
+fi
+
+if [ -z "${outfile}" ]; then
+  echo "You must define an output file" >&2
+  usage >&2
+  exit 2
+fi
+
+set -e
+
+if [ ! -z "${partsize}" ]; then
+  imgsize=$(echo "$partsize * ( 1 - ( $wcis/$wcir) - $reser) " | bc -l)
+fi
+
+pcount=$(echo "${imgsize}/4194304")
+
+#dd if=/dev/zero of="${outfile}" bs="${blocksize}"
+dd if=/dev/zero of="${outfile}" bs=4194304 count=pcount
+fdisk -u "${outfile}" <<EOF
+g
+n
+p
+1
+
+
+w
+EOF
+
+loop=$(losetup -f -P "${outfile}")
+mkfs.$format "${loop}p1"
+losetup -d $loop
