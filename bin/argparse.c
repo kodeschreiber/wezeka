@@ -47,9 +47,11 @@ struct option {
 typedef struct option option;
 
 int gen_opt(char* input, char* uniq, option* output) {
+  // Locate the equals sign, if present
   int index = -1;
   while(input[++index] != '=' && index < strlen(input)-1);
 
+  // Determine the number of arguments
   output->count=0;
   int mode = NONE_MODE, prev_mode = NONE_MODE;
   for(int pt=index+1; pt < strlen(input); pt++) {
@@ -67,9 +69,11 @@ int gen_opt(char* input, char* uniq, option* output) {
     output->count--;
   output->count++;
 
+  // Allocating some variable
   output->variable = (char*)malloc(sizeof(char) * index + 1);
   output->longhand = (char*)malloc(sizeof(char) * index + 3);
 
+  // If uniq is used
   if(uniq != NULL) {
     if(!uniq[input[0]]) {
       output->shorthand = (char*)malloc(sizeof(char) * 3);
@@ -82,9 +86,11 @@ int gen_opt(char* input, char* uniq, option* output) {
     output->shorthand = NULL;
   }
 
+  // Compose the strings for the option
   snprintf(output->variable, index+1, "%s", input);
   snprintf(output->longhand, index+3, "--%s", input);
 
+  // Allocate the values and guides
   size_t valsize = sizeof(char) * OPT_LEN_MAX * output->count + 1;
   output->values = (char*)malloc(valsize);
   output->guide = (char*)malloc(valsize);
@@ -95,7 +101,7 @@ int gen_opt(char* input, char* uniq, option* output) {
 
 int append_val(char* value, option* opt) {
   size_t savelen = sizeof(char) * opt->argin * OPT_LEN_MAX + 1;
-  char* save = (char*)malloc(savelen);
+  char* save = (char*)malloc(savelen);  // Used for switching out the string
   snprintf(save, savelen, "%s", opt->values);
   snprintf(opt->values, savelen+OPT_LEN_MAX, "%s%s ", save, value);
   free(save);
@@ -127,26 +133,28 @@ int print_usage(option opts[], size_t optc) {
 }
 
 int main(int argc, char* argv[]) {
-  char * line = NULL;
-  size_t len = 0;
-  size_t optc = 0;
-  int found = 0;
-  int res = 0;
-  option opts[OPT_MAX];
-  char* uniq = (char*)calloc(256, sizeof(char));
+  char * line = NULL;    // For reading each line of stdin
+  size_t len = 0;        // For the length of each line
+  size_t optc = 0;       // Keeps track of the number of options
+  int found = 0;         // Tracks if input option exists
+  int res = 0;           // Used for string comparisons
+  option opts[OPT_MAX];  // Array to store all of the options
+  char* uniq = (char*)calloc(256, sizeof(char)); // Tracks shorthand uniquity
 
-  option posargs;
+  option posargs; // Stores arguments not assumed by options
   char* pa_string = (char*)malloc(sizeof(char) * 12);
   snprintf(pa_string, 12, "posargs=%i", POS_ARG_COUNT_MAX);
   gen_opt(pa_string, NULL, &posargs);
   free(pa_string);
 
+  // Process input options
   while(getline(&line, &len, stdin) != -1)
     if(gen_opt(line, uniq, &opts[optc++]) != OK) {
       fprintf(stderr, "Unable to generate an option for %s\n", line);
       exit(INVALID_OPTION);
     }
 
+  // Process arguments
   for(int c = 1; c < argc; c++) {
     if(argv[c][0] == '-') {    // Is a flag
       found = 0;
@@ -156,6 +164,7 @@ int main(int argc, char* argv[]) {
         else                   // Is a shorthand flag
           res = strcmp(argv[c], opts[d].shorthand);
 
+        // If there is a match...
         if(res == 0) {
           if(opts[d].count < 1) {
             opts[d].values = "1";
@@ -168,7 +177,7 @@ int main(int argc, char* argv[]) {
           }
         }
       }
-      if(!found) {
+      if(!found) {  // For when an option does not exist
         fprintf(stderr, "Could not locate option: %s\n", argv[c]);
         print_usage(opts, optc);
         free(uniq);
@@ -183,10 +192,12 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  // Print the results
   for(int c = 0; c < optc; c++)
     output_opt(&opts[c]);
   output_opt(&posargs);
 
+  // Release all the allocations
   free(uniq);
   free_opt(opts);
   if(line)
