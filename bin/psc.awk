@@ -8,8 +8,9 @@
   split(nodes[n], file, ".")
   gsub($0, file[1] "(){")
   print $1
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
   print "}"
 }
 
@@ -19,8 +20,9 @@
   split(nodes[n], file, ".")
   gsub($0, "_" file[1] "(){")
   print $1
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
   print "}"
 }
 
@@ -30,8 +32,9 @@
   split(nodes[n], file, ".")
   gsub($0, file[1] "()(")
   print $1
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
   print ")"
 }
 
@@ -41,15 +44,17 @@
   split(nodes[n], file, ".")
   gsub($0, "_" file[1] "()(")
   print $1
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
   print ")"
 }
 
 /^\s*#file .*/ {
   split($0, cmdarr, " ")
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
 }
 
 /^\s*#usage .*/ {
@@ -59,7 +64,8 @@
   gsub($0, "_usage(){\ncat <<'EOF'")
   print $1
   FS=" "
-  while(getline line<cmdarr[2]){print line}
-  close(cmdarr[2])
+  infile=ctx "/" cmdarr[2]
+  while(getline line<infile){print line}
+  close(infile)
   print "EOF\n}"
 }

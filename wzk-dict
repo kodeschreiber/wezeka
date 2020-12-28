@@ -1,0 +1,87 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+# DICTIONARY
+---
+Dictionary is an environment filter made to help control
+the sourcing of environment variables in an expected
+behavior
+---
+Usage: dict <filter> <envfile> [delim]
+
+##Filters:
+Filters are defined by the behavior when attempting to set,
+set and unset variables:
+
+| Filter      | set     | unset | flag |
+|======================================|
+| overwriting | sets    | sets  | -o   |
+| stubborn    |  X      | sets  | -s   |
+| exclusive   | sets    |  X    | -e   |
+| unwritable  |  X      |  X    |      |
+| appending   | appends | sets  | -a   |
+
+The resulting usage can be any of the following:
+dict -o
+dict -s
+dict -e
+dict -a <delim>
+(Where <delim> is the separator between each appendage;
+  default is a space)
+
+The comparison of what is set and not set is based on
+the variables that exist in the parent shell's environment
+and the values from the envfile (or stdin if not defined)
+EOF
+}
+
+filter="${1}"
+envfile="${2:-/dev/stdin}"
+delim="${3:- }"
+
+setmode=0
+unsetmode=0
+
+case "${filter}" in
+  -o)
+    setmode=1
+    unsetmode=1
+  ;;
+
+  -s)
+    setmode=0
+    unsetmode=1
+  ;;
+
+  -e)
+    setmode=1
+    unsetmode=0
+  ;;
+
+  -a)
+    setmode=2
+    unsetmode=1
+  ;;
+
+  *)
+    echo "Unrecognized option "${filter}"" >&2
+    _usage
+    exit 1
+  ;;
+esac
+
+while read evar; do
+  var="$(echo "${evar}" | cut -d'=' -f1 | sed 's/export\s*//')"
+  if [ -v "${var}" ]; then
+    if [ $setmode -eq 1 ]; then
+      echo "${evar}"
+    elif [ $setmode -eq 2 ]; then
+      echo "${var}=${!var}${delim}$(echo "${evar}" | cut -d'=' -f2-)"
+    fi
+  else
+    if [ $unsetmode -eq 1 ]; then
+      echo "${evar}"
+    fi
+  fi
+done < "${envfile}"

@@ -1,33 +1,26 @@
-PREFIX=/usr/bin
-TMPDIR=$(shell pwd)/.tmp
+PREFIX=/usr
+CC=gcc
+STARGETS=wzk-sekt wzk-mkblk wzk-proxy wzk-factor wzk-dict
+CTARGETS=wzk-chaser
 
-setup:
-	mkdir -p $(TMPDIR)
+wzk-psc: ./bin/psc.skel
+	mkdir -p "$(PREFIX)/libexec"
+	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/libexec" ./bin/psc.awk
+	cat $< | awk -v ctx="./bin" -f ./bin/psc.awk | sed "s@%prefix%@$(PREFIX)@g" > $@
+	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
 
-psc: setup
-	cd bin; \
-	cat psc.skel | awk -f psc.awk > $(TMPDIR)/wzk-psc
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)" $(TMPDIR)/wzk-psc
+$(STARGETS): wzk-%: ./bin/%.skel wzk-psc
+	export CONTEXT='./bin'; \
+	wzk-psc $< | sed '2,$s/#\!\/bin\/bash/REMALL/;/REMALL/d' > $@
+	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
 
-sekt: setup psc
-	cd bin; \
-	wzk-psc ./sekt.skel > $(TMPDIR)/wzk-sekt
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)" $(TMPDIR)/wzk-sekt
+$(CTARGETS): wzk-%: ./bin/%.c
+	$(CC) -o $@ $<
+	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
 
-proxy: setup psc
-	cd bin; \
-	wzk-psc ./proxy.skel > $(TMPDIR)/proxy
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)" $(TMPDIR)/proxy
+factor: wzk-chaser wzk-sekt wzk-factor
 
-chaser: setup
-	cd bin; \
-	$(CC) -o $(TMPDIR)/wzk-chaser chaser.c
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)" $(TMPDIR)/wzk-chaser
+all: factor wzk-mkblk wzk-dict wzk-proxy
 
-factor: setup psc sekt chaser
-	cd bin; \
-	wzk-psc ./factor.skel | sed '2,$s/#\!\/bin\/bash/REMALL/;/REMALL/d' > $(TMPDIR)/wzk-factor
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)" $(TMPDIR)/wzk-factor
-
-teardown:
-	rm -rf $(TMPDIR)
+clean:
+	rm ./wzk*

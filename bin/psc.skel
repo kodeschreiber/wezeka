@@ -7,7 +7,4 @@ if [ "${1}" == "-h" ]; then
   exit 1
 fi
 
-  awk -f <(cat <<"EOF"
-#file ./psc.awk
-EOF
-) <"${1:-/dev/stdin}" >"${2:-/dev/stdout}"
+awk -v ctx="${CONTEXT:-./}" -f "%prefix%/libexec/psc.awk" <"${1:-/dev/stdin}" >"${2:-/dev/stdout}"

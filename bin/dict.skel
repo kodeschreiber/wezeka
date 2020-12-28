@@ -1,0 +1,53 @@
+#!/bin/bash
+
+#usage ../docs/dict.md
+
+filter="${1}"
+envfile="${2:-/dev/stdin}"
+delim="${3:- }"
+
+setmode=0
+unsetmode=0
+
+case "${filter}" in
+  -o)
+    setmode=1
+    unsetmode=1
+  ;;
+
+  -s)
+    setmode=0
+    unsetmode=1
+  ;;
+
+  -e)
+    setmode=1
+    unsetmode=0
+  ;;
+
+  -a)
+    setmode=2
+    unsetmode=1
+  ;;
+
+  *)
+    echo "Unrecognized option "${filter}"" >&2
+    _usage
+    exit 1
+  ;;
+esac
+
+while read evar; do
+  var="$(echo "${evar}" | cut -d'=' -f1 | sed 's/export\s*//')"
+  if [ -v "${var}" ]; then
+    if [ $setmode -eq 1 ]; then
+      echo "${evar}"
+    elif [ $setmode -eq 2 ]; then
+      echo "${var}=${!var}${delim}$(echo "${evar}" | cut -d'=' -f2-)"
+    fi
+  else
+    if [ $unsetmode -eq 1 ]; then
+      echo "${evar}"
+    fi
+  fi
+done < "${envfile}"

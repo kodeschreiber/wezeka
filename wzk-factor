@@ -49,7 +49,13 @@ exec 3>&1 4>&2
 
 # f_verbose='' @v <normal_string>
 @v() {
-  if [ "${f_verbose}" == "true" ]; then
+  if [ "$(cat /proc/$PPID/comm)" != "git-factor" -a "$(cat /proc/$PPID/comm)" != "wzk-factor" -a "$(cat /proc/$PPID/comm)" != "git" -a "$(cat /proc/$PPID/comm)" != "wzk" ]; then
+    cat /proc/$PPID/comm >> /tmp/factor.log
+  fi
+  if [ "$(cat /proc/$PPID/comm)" == "git-factor" -o "$(cat /proc/$PPID/comm)" == "wzk-factor" -o "$(cat /proc/$PPID/comm)" == "git" -o "$(cat /proc/$PPID/comm)" == "wzk" ]; then
+    echo "${1}"
+    cat /dev/stdin
+  elif [ "${f_verbose}" == "true" ]; then
     wzk-chaser "${1}"
   else
     echo "${1}"
@@ -390,6 +396,7 @@ if [ $? -ne 13 ]; then
 fi
 
 (
+mkdir -p "${f_module}"
 env -C "${f_module}" -i "${f_script_file}" 2>&1 | @v "$(@s "${1}" 4 "Building")"
 exit ${PIPESTATUS[0]}
 )
