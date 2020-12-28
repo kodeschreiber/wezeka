@@ -7,12 +7,11 @@ Current option input format:
   option=count  e.x. test=2
 
 Future option input format:
-  option [arg1 ... argN] Description
-*/
+  option=arg1 ... argN
+  option=[arg1] ... [argN]
 
-// #ifndef USAGE_LINK
-// #define USAGE_LINK "usage"
-// #endif
+  Spaces are used to split the arguments
+*/
 
 #ifndef OPT_MAX
 #define OPT_MAX 128
@@ -27,6 +26,10 @@ Future option input format:
 #define POS_ARG_COUNT_MAX 64
 #endif
 
+#define NONE_MODE 0
+#define WORD_MODE 1
+#define SPACE_MODE 2
+
 enum {
   OK = 0,
   INVALID_OPTION
@@ -36,6 +39,7 @@ struct option {
   char* variable;
   char* shorthand;
   char* longhand;
+  char* guide;
   char* values;
   int count;
   int argin;
@@ -44,9 +48,24 @@ typedef struct option option;
 
 int gen_opt(char* input, char* uniq, option* output) {
   int index = -1;
-  while(input[++index] != '=');
-  if(index >= strlen(input))
-    return INVALID_OPTION;
+  while(input[++index] != '=' && index < strlen(input)-1);
+
+  output->count=0;
+  int mode = NONE_MODE, prev_mode = NONE_MODE;
+  for(int pt=index+1; pt < strlen(input); pt++) {
+    prev_mode = mode;
+    if(input[pt] == ' ')
+      mode = SPACE_MODE;
+    else if(input[pt] == '\n')
+      break;
+    else
+      mode = WORD_MODE;
+    if(prev_mode == WORD_MODE && mode == SPACE_MODE)
+      output->count++;
+  }
+  if(mode == SPACE_MODE)
+    output->count--;
+  output->count++;
 
   output->variable = (char*)malloc(sizeof(char) * index + 1);
   output->longhand = (char*)malloc(sizeof(char) * index + 3);
@@ -66,10 +85,12 @@ int gen_opt(char* input, char* uniq, option* output) {
   snprintf(output->variable, index+1, "%s", input);
   snprintf(output->longhand, index+3, "--%s", input);
 
-  char number[4];
-  snprintf(number, 3, "%s", (input+index+1));
-  output->count = atoi(number);
-  output->values = (char*)malloc(sizeof(char) * OPT_LEN_MAX * output->count + 1);
+  size_t valsize = sizeof(char) * OPT_LEN_MAX * output->count + 1;
+  output->values = (char*)malloc(valsize);
+  output->guide = (char*)malloc(valsize);
+  snprintf(output->guide, (strlen(input)-index)-1, "%s", (input+index+1));
+
+  return OK;
 }
 
 int append_val(char* value, option* opt) {
@@ -84,6 +105,7 @@ int append_val(char* value, option* opt) {
 int free_opt(option* input) {
   free(input->variable);
   free(input->longhand);
+  free(input->guide);
   free(input->values);
   if(input->shorthand);
     free(input->shorthand);
@@ -99,9 +121,9 @@ int print_usage(option opts[], size_t optc) {
   fprintf(stderr, "Usage:\n");
   for(int c = 0; c < optc; c++)
     if(opts[c].shorthand == NULL)
-      fprintf(stderr, "      %s\tTakes %i following arguments\n", opts[c].longhand, opts[c].count);
+      fprintf(stderr, "      %s\t%s\n", opts[c].longhand, opts[c].guide);
     else
-      fprintf(stderr, "  %s, %s\tTakes %i following arguments\n", opts[c].shorthand, opts[c].longhand, opts[c].count);
+      fprintf(stderr, "  %s, %s\t%s\n", opts[c].shorthand, opts[c].longhand, opts[c].guide);
 }
 
 int main(int argc, char* argv[]) {
@@ -120,7 +142,7 @@ int main(int argc, char* argv[]) {
   free(pa_string);
 
   while(getline(&line, &len, stdin) != -1)
-    if(!gen_opt(line, uniq, &opts[optc++])) {
+    if(gen_opt(line, uniq, &opts[optc++]) != OK) {
       fprintf(stderr, "Unable to generate an option for %s\n", line);
       exit(INVALID_OPTION);
     }
@@ -144,7 +166,6 @@ int main(int argc, char* argv[]) {
             append_val(argv[++c], &opts[d]);
             found = 1;
           }
-          // c++;
         }
       }
       if(!found) {
