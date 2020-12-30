@@ -1,5 +1,0 @@
-#!/bin/bash
-
-if [ "$(cat /proc/sys/kernel/unprivileged_userns_clone)" -ne 1 ]; then
-  echo 1 | sudo tee /proc/sys/kernel/unprivileged_userns_clone > /dev/null
-fi
