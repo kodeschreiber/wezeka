@@ -32,7 +32,15 @@ Future option input format:
 
 enum {
   OK = 0,
-  INVALID_OPTION
+  INVALID_OPTION,
+  ERROR_NO_MULTI,
+  ERROR_REQUIRED
+};
+
+enum {
+  REQUIRED = 0,
+  MULTI,
+  IS_PARGS
 };
 
 struct option {
@@ -43,13 +51,38 @@ struct option {
   char* values;
   int count;
   int argin;
+  int required;
+  int multi;
+  int ispargs;
 };
 typedef struct option option;
 
+void freeall(void* line[], size_t len) {
+  for(int c = 0; c < len; c++)
+    if(line[c] != NULL)
+      free(line[c]);
+}
+
 int gen_opt(char* input, char* uniq, option* output) {
-  // Locate the equals sign, if present
+  output->required = -1;
+  output->multi = -1;
+  output->ispargs = -1;
+  output->argin = 0;
+
+  // Look for control characters
+  while(input[0] == '!' || input[0] == '+' || input[0] == '?') {
+    if(input[0] == '!')
+      output->required = REQUIRED;
+    else if(input[0] == '+')
+      output->multi = MULTI;
+    else if(input[0] == '?')
+      output->ispargs = IS_PARGS;
+    input++;
+  }
+
+  // Locate the equals colon, if present
   int index = -1;
-  while(input[++index] != '=' && index < strlen(input)-1);
+  while(input[++index] != ':' && index < strlen(input)-1);
 
   // Determine the number of arguments
   output->count=0;
@@ -126,10 +159,13 @@ int output_opt(option* input) {
 int print_usage(option opts[], size_t optc) {
   fprintf(stderr, "Usage:\n");
   for(int c = 0; c < optc; c++)
-    if(opts[c].shorthand == NULL)
-      fprintf(stderr, "      %s\t%s\n", opts[c].longhand, opts[c].guide);
-    else
-      fprintf(stderr, "  %s, %s\t%s\n", opts[c].shorthand, opts[c].longhand, opts[c].guide);
+    if(opts[c].ispargs != IS_PARGS) {
+      if(opts[c].shorthand == NULL)
+        fprintf(stderr, "      %s\t%s\n", opts[c].longhand, opts[c].guide);
+      else
+        fprintf(stderr, "  %s, %s\t%s\n", opts[c].shorthand, opts[c].longhand, opts[c].guide);
+    }
+    // TODO: Add listing for posargs
 }
 
 int main(int argc, char* argv[]) {
@@ -138,27 +174,37 @@ int main(int argc, char* argv[]) {
   size_t optc = 0;       // Keeps track of the number of options
   int found = 0;         // Tracks if input option exists
   int res = 0;           // Used for string comparisons
-  option opts[OPT_MAX];  // Array to store all of the options
+  option* opts = malloc(sizeof(*opts) * OPT_MAX);  // Array to store all of the options
   char* uniq = (char*)calloc(256, sizeof(char)); // Tracks shorthand uniquity
-
-  option posargs; // Stores arguments not assumed by options
-  char* pa_string = (char*)malloc(sizeof(char) * 12);
-  snprintf(pa_string, 12, "posargs=%i", POS_ARG_COUNT_MAX);
-  gen_opt(pa_string, NULL, &posargs);
-  free(pa_string);
+  int pidx = -1;  // Used to find the option for pos arguments in the array
+  char* pa_string = "?+posargs: [ANY]";  // The default posargs line
+  void* freeline[8] = { line, opts, uniq };  // Used for easy memory cleanup
+  size_t fcount = 3;  // Tracks the number of pointer in the array above
 
   // Process input options
-  while(getline(&line, &len, stdin) != -1)
-    if(gen_opt(line, uniq, &opts[optc++]) != OK) {
+  while(getline(&line, &len, stdin) != -1) {
+    if(gen_opt(line, uniq, &opts[optc]) != OK) {
       fprintf(stderr, "Unable to generate an option for %s\n", line);
       exit(INVALID_OPTION);
     }
+    if(opts[optc].ispargs == IS_PARGS)
+      pidx = optc;
+    optc++;
+  }
+
+  // // Add positional argument collector if not defined
+  if(pidx == -1) {
+    opts[optc].variable = (char*)malloc(sizeof(char) * 8);
+    gen_opt(pa_string, NULL, &opts[optc]);
+    pidx = optc;
+    optc++;
+  }
 
   // Process arguments
   for(int c = 1; c < argc; c++) {
     if(argv[c][0] == '-') {    // Is a flag
       found = 0;
-      for(int d = 0; d < optc; d++) {
+      for(int d = 0; d < optc-1; d++) {
         if(argv[c][1] == '-')  // Is a verbose flag
           res = strcmp(argv[c], opts[d].longhand);
         else                   // Is a shorthand flag
@@ -166,6 +212,15 @@ int main(int argc, char* argv[]) {
 
         // If there is a match...
         if(res == 0) {
+          // Check if multiple occurances is allowed
+          if(strlen(opts[d].values) > 0 && opts[d].multi != MULTI) {
+            fprintf(stderr, "Multiple calls to flag '%s' is not permitted\n", opts[d].longhand);
+            print_usage(opts, optc);
+            free_opt(opts);
+            freeall(freeline, fcount);
+            exit(ERROR_NO_MULTI);
+          }
+
           if(opts[d].count < 1) {
             opts[d].values = "1";
             found = 1;
@@ -180,28 +235,32 @@ int main(int argc, char* argv[]) {
       if(!found) {  // For when an option does not exist
         fprintf(stderr, "Could not locate option: %s\n", argv[c]);
         print_usage(opts, optc);
-        free(uniq);
         for(int f = 0; f < optc; f++)
           free_opt(&opts[f]);
-        if(line)
-          free(line);
+        freeall(freeline, fcount);
         exit(EXIT_FAILURE);
       }
     } else {  // Is a positional argument
-      append_val(argv[c], &posargs);
+      append_val(argv[c], &opts[pidx]);
     }
   }
 
-  // Print the results
-  for(int c = 0; c < optc; c++)
+  // Check and Print the results
+  for(int c = 0; c < optc; c++) {
+    if(strlen(opts[c].values) < 1 && opts[c].required == REQUIRED) {
+      fprintf(stderr, "Flag '%s' is required, but undefined\n", opts[c].longhand);
+      print_usage(opts, optc);
+      free_opt(opts);
+      freeall(freeline, fcount);
+      exit(ERROR_REQUIRED);
+    }
     output_opt(&opts[c]);
-  output_opt(&posargs);
+  }
+  // output_opt(&opts[pidx]);
 
   // Release all the allocations
-  free(uniq);
   free_opt(opts);
-  if(line)
-    free(line);
+  freeall(freeline, fcount);
 
   exit(EXIT_SUCCESS);
 }

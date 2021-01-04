@@ -1,0 +1,72 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+# ISOLATE
+
+Usage: isolate [-p profile_image] [-b bind_directory] [ -r sub_root_dir ] CMD ARG1 ... ARGN
+EOF
+}
+
+set -a
+source <(wzk-argparse $@ <<EOF
+!+profile: [profile_image]
++bind: [bind_directory]
+!+root: [subroot_directory]
+?!+posargs:
+EOF
+)
+if [ -z "${profile}" ]; then
+  exit 1
+fi
+set +a
+
+cleanup() {
+  # umount "${mntdir}"
+  for file in $profile; do
+    tmntdir="${prodir}/$(basename "${file}" | cut -d'.' -f1)"
+    umount "${tmntdir}"
+    wzk-umntblk "${tmntdir}"
+  done
+  rm -rf "${tmpdir}" "${workdir}"
+}
+trap cleanup EXIT
+root="$(realpath "${root}")"
+tmpdir="$(mktemp -d)"
+tmpscr="${tmpdir}/script"
+workdir="$(dirname "${root}")/.workdir"
+mntdir="${tmpdir}/mnt"
+prodir="${tmpdir}/pro"
+prodirs=""
+bindirs=""
+
+mkdir -p "${workdir}" "${mntdir}" "${prodir}"
+
+for file in $profile; do
+  tmntdir="${prodir}/$(basename "${file}" | cut -d'.' -f1)"
+  mkdir "${tmntdir}"
+  wzk-mntblk "${file}" "${tmntdir}"
+  prodirs="${prodirs}"${tmntdir}":"
+done
+prodirs="${prodirs:0:-1}"
+
+for dir in $bind; do
+  bindirs="${bindirs} --ro-bind '${dir}' '${dir}'"
+done
+
+if [ $(cat /proc/sys/kernel/unprivileged_userns_clone) -ne 1 -a $EUID -ne 0 ]; then
+  echo "You many not have access to namespaces as a non-root user"
+  echo "Run: 'echo 1 | sudo tee /proc/sys/kernel/unprivileged_userns_clone' to enable this."
+  echo "You may also need to be a part of the 'disk' group:"
+  echo "Run: 'sudo usermod -a -G disk \$USER' and logout/login"
+fi
+
+cat <<EOF >"${tmpscr}"
+mount -t overlay -o lowerdir="${prodirs}",upperdir="${root}",workdir="${workdir}" overlay "${mntdir}"
+bwrap --bind "${mntdir}" / \
+  --proc /proc --dev /dev \
+  --bind "$(pwd)" "$(pwd)" $bindirs \
+  --chdir "$(pwd)" $posargs
+EOF
+chmod +x "${tmpscr}"
+unshare -rm "${tmpscr}"

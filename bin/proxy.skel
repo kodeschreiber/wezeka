@@ -2,7 +2,11 @@
 
 base="$(basename "${0}")"
 
-#usage ../docs/proxy.md
+_usage() {
+  cat <<EOF
+#file ../docs/proxy.md
+EOF
+}
 
 _usage_cmd() {
   cat <<EOF
@@ -10,7 +14,7 @@ _usage_cmd() {
 EOF
 }
 
-if [ "${base}" == "proxy" ]; then
+if [[ "${base}" == *proxy ]]; then
   _usage
   exit 0
 fi
