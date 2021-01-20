@@ -9,7 +9,11 @@ _clear_cache | @v "$(@s "${1}" 1 "Cleaning" clean)"
 _handle_repo() {
   if [ "${f_freeze}" == "true" ]; then
     if [ ! -f "${f_frozen}" -a ! -d "${f_module}" ]; then
-      git clone "${f_url}" -b "${f_tag}" "${f_module}"
+      git clone "${f_url}" --depth 1 -b "${f_tag}" "${f_module}"
+      (
+        cd "${f_module}"
+        git fetch --unshallow
+      )
       @einz "Could not pull the module ${1}"
     fi
 
@@ -30,7 +34,11 @@ _handle_repo() {
     fi
   else
     if [ ! -z "${f_url}" -a ! -d "${f_module}" ]; then
-      git clone "${f_url}" -b "${f_tag}" "${f_module}"
+      git clone "${f_url}" --depth 1 -b "${f_tag}" "${f_module}"
+      (
+        cd "${f_module}"
+        git fetch --unshallow
+      )
       @einz "Could not pull the module ${1}"
     fi
   fi
