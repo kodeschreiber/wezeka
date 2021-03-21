@@ -1,0 +1,73 @@
+#!/bin/bash
+
+#usage ../../docs/ifio.md
+
+#func ./ifio/ifio_msg
+
+#func ./ifio/run_script
+
+#func ./ifio/update_mnemonic
+
+#func ./ifio/attempt
+
+chdir="${1:-./}"
+
+# Check for IFIO_SCRIPT_DIR
+if [ -z "${IFIO_SCRIPT_DIR}" ]; then
+  echo "IFIO_SCRIPT_DIR is undefined. Please set this variable to a valid directory" >&2
+  exit 1
+fi
+
+chdir="./"
+mnemonic=""
+verbose=0
+quiet=0
+dump=""
+
+while [ $# -gt 0 ]; do
+  case "${1}" in
+    -c|--chdir) shift; chdir="${1}"; ;;
+    -m|--mnemonic) shift; mnemonic="$(realpath "${1}")"; ;;
+    -v|--verbose) verbose=1; ;;
+    -q|--quiet) quiet=1; ;;
+    -h|--help) usage; exit; ;;
+    -d|--dump) shift; dump="${1}"; ;;
+    *) echo "Unknown option" >&2; usage; exit 2; ;;
+  esac
+  shift
+done
+
+# Check for dump
+if [ ! -z "${dump}" ]; then
+  dmpscr="$(which wzk-dumpvars)"
+  env - SOV="set -a" EOV="source ${dmpscr:-./wzk-dumpvars}" "${IFIO_SCRIPT_DIR}/${dump}"
+  exit
+fi
+
+if [ ! -z "${mnemonic}" -a ! -f "${mnemonic}" ]; then
+  touch "${mnemonic}"
+fi
+
+cd "${chdir}"
+
+# Try to run the cached option
+if [ -f "${mnemonic}" ]; then
+  firsttry="$(grep "$(pwd)" "${mnemonic}" | cut -d':' -f2)"
+  if [ ! -z "${firsttry}" -a -f "${IFIO_SCRIPT_DIR}/${firsttry}" ]; then
+    attempt "${IFIO_SCRIPT_DIR}/${firsttry}"
+    if [ $? -eq 0 ]; then
+      exit 0
+    fi
+  fi
+fi
+
+# Try all scripts
+for scr in ${IFIO_SCRIPT_DIR}/*; do
+  attempt "${scr}"
+  if [ $? -eq 0 ]; then
+    exit 0
+  fi
+done
+
+ifio_msg "Unable to build with given scripts\n"
+exit 1

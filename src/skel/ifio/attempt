@@ -1,0 +1,11 @@
+# attempt <script>
+ifio_msg "[IFIO] [ ] ${1}"
+run_script "${1}"
+res=$?
+if [ $res -eq 0 ]; then
+  ifio_msg "\r[IFIO] [✔] ${1}\n"
+  update_mnemonic "${1}"
+else
+  ifio_msg "\r[IFIO] [✗] ${1}\n"
+fi
+return $res

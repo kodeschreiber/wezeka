@@ -12,7 +12,7 @@ BARMAX=7
 
 #file ./factor/log
 
-#usage ../docs/factor.md
+#usage ../../docs/factor.md
 
 #hfunc ./factor/compose_config
 

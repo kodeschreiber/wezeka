@@ -1,0 +1,6 @@
+# run_script <script>
+if [ $verbose -ne 1 ]; then
+  exec 1>/dev/null 2>/dev/null
+fi
+$@
+exit $?

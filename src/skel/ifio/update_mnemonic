@@ -1,0 +1,5 @@
+# update_mnemonic <script>
+if [ -f "${mnemonic}" ]; then
+  sed -i -e "s>^$(pwd):.*$>DELETEME>" -e '/DELETEME/d' "${mnemonic}"
+  echo "$(pwd):$(basename "${1}")" >> "${mnemonic}"
+fi

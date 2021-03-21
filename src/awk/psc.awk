@@ -9,7 +9,7 @@
   gsub($0, file[1] "(){")
   print $1
   infile=ctx "/" cmdarr[2]
-  while(getline line<infile){print line}
+  while(getline line<infile){ if(substr(line,0,2) != "#!"){print line}}
   close(infile)
   print "}"
 }
@@ -21,7 +21,7 @@
   gsub($0, "_" file[1] "(){")
   print $1
   infile=ctx "/" cmdarr[2]
-  while(getline line<infile){print line}
+  while(getline line<infile){ if(substr(line,0,2) != "#!"){print line}}
   close(infile)
   print "}"
 }
@@ -33,7 +33,7 @@
   gsub($0, file[1] "()(")
   print $1
   infile=ctx "/" cmdarr[2]
-  while(getline line<infile){print line}
+  while(getline line<infile){ if(substr(line,0,2) != "#!"){print line}}
   close(infile)
   print ")"
 }
@@ -45,7 +45,7 @@
   gsub($0, "_" file[1] "()(")
   print $1
   infile=ctx "/" cmdarr[2]
-  while(getline line<infile){print line}
+  while(getline line<infile){ if(substr(line,0,2) != "#!"){print line}}
   close(infile)
   print ")"
 }

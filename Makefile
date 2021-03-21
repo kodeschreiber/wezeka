@@ -1,40 +1,60 @@
-PREFIX=/usr
-CC=gcc
-STARGETS=wzk-sekt wzk-proxy wzk-factor wzk-dict wzk-profile wzk-isolate
-CTARGETS=wzk-chaser wzk-argparse wzk-blkctl
+BUILD_TARGETS=$(wildcard src/*)
+ALL_BINS=$(wildcard build/bin/*)
+ALL_DOCS=$(wildcard docs/*)
+BUILD_ROOT=$(shell pwd)
 
-wzk-psc: ./bin/psc.skel
-	mkdir -p "$(PREFIX)/libexec"
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/libexec" ./bin/psc.awk
-	cat $< | awk -v ctx="./bin" -f ./bin/psc.awk | sed "s@%prefix%@$(PREFIX)@g" > $@
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
+.PHONY: all
+all: build-all
 
-$(STARGETS): wzk-%: ./bin/%.skel wzk-psc
-	export CONTEXT='./bin'; \
-	wzk-psc $< | sed '2,$s/#\!\/bin\/bash/REMALL/;/REMALL/d' > $@
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
 
-$(CTARGETS): wzk-%: ./bin/%.c
-	$(CC) -o $@ $<
-	/usr/bin/install -o 0 -g 0 -m 555 -t "$(PREFIX)/bin" $@
+### BUILD SECTION ###
+.PHONY: build-all
+build-all: build-bins build-docs
 
-factor: wzk-chaser wzk-sekt wzk-factor
+.PHONY: build-bins
+build-bins:
+	mkdir -p ./build/bin ./build/etc/bash_completion.d
+	cd ./src/skel; \
+	$(MAKE) PREFIX="$(BUILD_ROOT)/build"
+	cd ./src/c; \
+	$(MAKE) PREFIX="$(BUILD_ROOT)/build" CC=$(CC) CFLAGS=$(CFLAGS)
+	cp ./src/wzk.sh ./build/etc/bash_completion.d/
 
-blkctl: wzk-blkctl
-	rm -f $(PREFIX)/bin/wzk-mkblk $(PREFIX)/bin/wzk-mntblk $(PREFIX)/bin/wzk-umntblk
-	ln -s $(PREFIX)/bin/wzk-blkctl $(PREFIX)/bin/wzk-mkblk
-	ln -s $(PREFIX)/bin/wzk-blkctl $(PREFIX)/bin/wzk-mntblk
-	ln -s $(PREFIX)/bin/wzk-blkctl $(PREFIX)/bin/wzk-umntblk
+.PHONY: build-docs
+build-docs:
+	mkdir -p ./build/share/wzk
+	cp ./docs/* ./build/share/wzk/
 
-wzk: wzk-proxy
-	rm -f $(PREFIX)/bin/wzk
-	ln -s $(PREFIX)/bin/wzk-proxy $(PREFIX)/bin/wzk
 
-autofill: ./bin/wzk_autofill.sh
-	cat $< | sed "s@%prefix%@$(PREFIX)@g" > ./wzk_autofill.sh
-	cp ./wzk_autofill.sh /etc/bash_completion.d/
+### INSTALL SECTION ###
+.PHONY: install-bins
+install-bins:
+	mkdir -p $(PREFIX)/bin
+	for file in $(ALL_BINS); do install -m 550 $$file $(PREFIX)/bin; done
+	mkdir -p $(PREFIX)/etc/bash_completion.d
+	install -m 555 ./build/etc/bash_completion.d/wzk.sh $(PREFIX)/etc/bash_completion.d
 
-all: factor blkctl wzk autofill $(STARGETS) $(CTARGETS)
+.PHONY: install-docs
+install-docs:
+	mkdir -p $(PREFIX)/share/wzk
+	for file in $(ALL_DOCS); do install -m 444 $$file $(PREFIX)/share/wzk; done
 
+.PHONY: install
+install: install-bins install-docs
+
+
+### CLEAN SECTION ###
+.PHONY: clean
 clean:
-	rm -f ./wzk*
+	rm -rf ./build
+
+.PHONY: legacy_uninstall
+legacy_uninstall:
+	rm -f $(PREFIX)/bin/wzk-*
+	rm -f /etc/bash_completion.d/wzk*
+
+.PHONY: uninstall
+uninstall:
+	rm -f  $(PREFIX)/bin/wzk-*
+	rm -f  /etc/bash_completion.d/wzk.sh
+	rm -rf $(PREFIX)/share/wzk

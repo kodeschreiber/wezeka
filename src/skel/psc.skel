@@ -1,10 +1,13 @@
 #!/bin/bash
 
-#usage ../docs/psc.md
+#usage ../../docs/psc.md
 
 if [ "${1}" == "-h" ]; then
   _usage
   exit 1
 fi
 
-awk -v ctx="${CONTEXT:-./}" -f "%prefix%/libexec/psc.awk" <"${1:-/dev/stdin}" >"${2:-/dev/stdout}"
+awk -v ctx="${CONTEXT:-./}" -f <(cat <<"EOF"
+#file ../awk/psc.awk
+EOF
+) <"${1:-/dev/stdin}" >"${2:-/dev/stdout}"

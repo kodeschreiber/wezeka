@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#usage ../docs/sekt.md
+#usage ../../docs/sekt.md
 
 if [ $# -lt 2 ]; then
   _usage
@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do
   awk -v name="${sekt_name}" -v env="${sekt_env}" \
       -v safe="${sekt_safe}" -v norem="${sekt_nc}" \
       -v prefix="${sekt_prefix}" -f <(cat <<"EOF"
-#file ./sekt.awk
+#file ../awk/sekt.awk
 EOF
 ) <"${sekt_file}"
   shift

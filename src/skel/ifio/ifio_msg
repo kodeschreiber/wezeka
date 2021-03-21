@@ -1,0 +1,7 @@
+if [ $quiet -ne 1 ]; then
+  if [ $verbose -ne 1 ]; then
+    echo -ne "${@}"
+  else
+    echo "${@}" | sed 's/\\r//g;s/\\n//g'
+  fi
+fi

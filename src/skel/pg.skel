@@ -1,39 +1,11 @@
 #!/bin/bash
 
-usage() {
-cat <<EOF
-PG - Process Grid
-
-Create a TMUX session designed to break up STDOUT, STDIN and milestones
-into different panes
-
-Usage: pg <workdir> <output_dir> <session_name>
-
-OPTIONS:
-
-<workdir>
-  Working directory for editing
-
-<output_dir>
-  This directory will be populated with the files 'stdout' and 'stderr'
-  along with the pipe 'progress'
-
-<session_name>
-  Name for tmux session
-
-EOF
-}
+#usage ../../docs/pg.md
 
 cleanup() {
   tmux kill-session -t "${session_name}"
 }
 trap cleanup EXIT
-
-#if [ ! -x "$(which mc)" ]; then
-#  echo "Please install Midnight Commander" >&2
-#  echo "sudo apt install mc" >&2
-#  exit 1
-#fi
 
 if [ ! -x "$(which tmux)" ]; then
   echo "Please install TMUX" >&2
@@ -60,18 +32,8 @@ session="${session_name}"
 tmux start-server
 tmux new-session -d -s $session -n tail "tail -f ${output_dir}/progress"
 tmux setw -g mouse on
-
-#tmux new-window -t $session:1 -n scratch
-#tmux select-window -t $session:1
-#tmux selectp -t 1
-#tmux send-keys "tail -f ${output_dir}/progress" C-m
 tmux splitp -v -p 95
 tmux send-keys "tail -f ${output_dir}/stdout" C-m
-#tmux selectp -t 2
 tmux splitp -h -p 50
-#tmux selectp -t 3
 tmux send-keys "tail -f ${output_dir}/stderr" C-m 
-#tmux selectp -t 1
-
-#tmux select-window -t $session:0
 tmux attach-session -t $session

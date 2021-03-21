@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#usage ../../docs/nofail.md
+
+if [ "${1}" == "-h" -o "${1}" == "--help" ]; then
+  usage
+  exit
+fi
+
+$@
+exit 0

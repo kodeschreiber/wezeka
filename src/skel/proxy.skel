@@ -4,13 +4,13 @@ base="$(basename "${0}")"
 
 _usage() {
   cat <<EOF
-#file ../docs/proxy.md
+#file ../../docs/proxy.md
 EOF
 }
 
 _usage_cmd() {
   cat <<EOF
-#file ../docs/proxy-cmd.md
+#file ../../docs/proxy-cmd.md
 EOF
 }
 

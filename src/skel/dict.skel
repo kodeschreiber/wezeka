@@ -1,53 +1,6 @@
 #!/bin/bash
 
-usage() {
-cat <<EOF
-BASH DICT
-
-Usage: dict [optional: BEHAVIOR] dict_file1 ... dict_fileN
-
-#[optional: OPERATION [ARG]]
-#OPERATIONS:
-#
-#-m, --merge (default)
-#  Merge input dictionaries and print the result
-#
-#-g,  --get <key>
-#  Get the value of the key
-#
-#-s,  --set <key>=<value>
-#  Set the value of the key
-
-BEHAVIORS:
-
--se, --stubborn-exclusive
-  The first value set for the key is permanent; no new keys allowed
-
--sn, --stubborn-nonexclusive
-  The first value set for the key is permanent; new keys allowed
-  
--oe, --overwrite-exclusive
-  New values for any key override their predecessor; no new keys allowed
-  
--on, --overwrite-nonexculsive (default)
-  New values for any key override their predecessor; new keys allowed
-
-FORMATTING:
-
-The format of a dictionary file must be:
-
-key=value
-
-where the key:
-  - Starts from the beginning of the line
-  - Matches the regex [a-zA-Z0-9_]*
-  - Has no space between it and the equals sign
-
-and the value:
-  - Has no space between it and the equals sign
-  - Ends at the end-of-line
-EOF
-}
+#usage ../../docs/dict.md
 
 trap '{ rm -f "${buffer}" "${reference}"; };' EXIT
 
@@ -61,9 +14,6 @@ order=""
 # ARGPARSE
 while [ $# -gt 0 ]; do
   case "${1}" in
-#    -m) operation="-m"; ;;
-#    -g) operation="-g"; shift; arg="${1}"; ;;
-#    -s) operation="-s"; shift; arg="${1}"; ;;
     -se) behavior="-se"; ;;
     -sn) behavior="-sn"; ;;
     -oe) behavior="-oe"; ;;

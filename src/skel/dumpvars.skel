@@ -1,0 +1,11 @@
+if [ "$(basename "${0}")" == "wzk-dumpvars" ]; then
+cat <<EOF
+WARNING: This script is not meant to be used
+         directly. It is an interal command
+         for "ifio". This exists due to shell
+         sourcing limitations
+EOF
+fi
+
+env | egrep -v 'PWD=|SHLVL=|_=|SOV=|EOV='
+exit
