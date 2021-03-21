@@ -1,0 +1,35 @@
+#!/bin/bash
+
+usage() {
+cat <<EOF
+OVERLAY-WRAP-RUN
+
+Used by 'isloate' to run a pseudo-container
+
+Usage: overlay_wrap_run <diff-dir> <lowerdirs> <chdir> <bind-opts>
+
+EOF
+}
+
+cleanup() {
+  umount "${mntdir}"
+  rm -rf "${hidden}"
+}
+trap cleanup EXIT
+set -e
+
+diff="$(realpath "${1}")"
+rootfs="${2}"
+chdir="${3}"
+bind="${4}"
+shift; shift; shift; shift
+
+hidden="$(dirname "$(realpath "${diff}")")/.isolate"
+workdir="${hidden}/work"
+mntdir="${hidden}/mnt"
+diffdir="${hidden}/diff"
+
+mkdir -p "${diffdir}" "${workdir}" "${mntdir}" "${diff}"
+mount -t overlay overlay -oupperdir="${diffdir}",lowerdir="${rootfs}",workdir="${workdir}" "${mntdir}"
+bwrap --bind "${mntdir}" / $bind --chdir "${chdir}" $@
+rsync -a "${diffdir}/" "${diff}/"

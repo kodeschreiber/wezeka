@@ -1,10 +1,10 @@
-# DICTIONARY
+# ENVIRONMENT DICTIONARY
 ---
 Dictionary is an environment filter made to help control
 the sourcing of environment variables in an expected
 behavior
 ---
-Usage: dict <filter> <envfile> [delim]
+Usage: envdict <filter> <envfile> [delim]
 
 ##Filters:
 Filters are defined by the behavior when attempting to set,

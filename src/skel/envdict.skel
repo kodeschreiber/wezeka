@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#usage ../docs/dict.md
+#usage ../docs/envdict.md
 
 filter="${1}"
 envfile="${2:-/dev/stdin}"

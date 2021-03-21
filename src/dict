@@ -1,0 +1,116 @@
+#!/bin/bash
+
+usage() {
+cat <<EOF
+BASH DICT
+
+Usage: dict [optional: BEHAVIOR] dict_file1 ... dict_fileN
+
+#[optional: OPERATION [ARG]]
+#OPERATIONS:
+#
+#-m, --merge (default)
+#  Merge input dictionaries and print the result
+#
+#-g,  --get <key>
+#  Get the value of the key
+#
+#-s,  --set <key>=<value>
+#  Set the value of the key
+
+BEHAVIORS:
+
+-se, --stubborn-exclusive
+  The first value set for the key is permanent; no new keys allowed
+
+-sn, --stubborn-nonexclusive
+  The first value set for the key is permanent; new keys allowed
+  
+-oe, --overwrite-exclusive
+  New values for any key override their predecessor; no new keys allowed
+  
+-on, --overwrite-nonexculsive (default)
+  New values for any key override their predecessor; new keys allowed
+
+FORMATTING:
+
+The format of a dictionary file must be:
+
+key=value
+
+where the key:
+  - Starts from the beginning of the line
+  - Matches the regex [a-zA-Z0-9_]*
+  - Has no space between it and the equals sign
+
+and the value:
+  - Has no space between it and the equals sign
+  - Ends at the end-of-line
+EOF
+}
+
+trap '{ rm -f "${buffer}" "${reference}"; };' EXIT
+
+buffer="$(mktemp)"
+reference="$(mktemp)"
+#operation="-m"
+behavior="-on"
+#arg=""
+order=""
+
+# ARGPARSE
+while [ $# -gt 0 ]; do
+  case "${1}" in
+#    -m) operation="-m"; ;;
+#    -g) operation="-g"; shift; arg="${1}"; ;;
+#    -s) operation="-s"; shift; arg="${1}"; ;;
+    -se) behavior="-se"; ;;
+    -sn) behavior="-sn"; ;;
+    -oe) behavior="-oe"; ;;
+    -on) behavior="-on"; ;;
+    -h|--help) usage; exit; ;;
+    *) break; ;;
+  esac
+  shift
+done
+
+if [ $# -eq 0 ]; then
+  echo "No files specified"
+  exit 1
+fi
+
+# Merge Dictionaries
+cat "${1}" > "${reference}"
+
+# Choose direction
+case "${behavior}" in
+  -oe|-on) order="$(printf '%s\n' "$@" | tac | sed ':a;N;$!ba;s/\n/|/g')|${reference}"; ;;  # Reverse and set separate by pipe
+  -se|-sn) order="${reference}|$(printf '%s\n' "$@" |       sed ':a;N;$!ba;s/\n/|/g')"; ;;  # Set separate by pipe
+esac
+
+# Start merging (based on exclusivity)
+case "${behavior}" in
+  -se|-oe)
+    while read file; do
+      while read line; do
+        key="$(echo "${line}" | cut -d'=' -f1)"
+        if grep -qs "^${key}=" "${reference}" && ! grep -qs "^${key}=" "${buffer}"; then
+          echo "${line}" >> "${buffer}"
+        fi
+      done <"${file}"
+    done < <(echo "${order}" | sed 's/|/\n/g')
+  ;;
+
+  -sn|-on)
+    while read file; do
+      while read line; do
+        key="$(echo "${line}" | cut -d'=' -f1)"
+        if ! grep -qs "^${key}=" "${buffer}"; then
+          echo "${line}" >> "${buffer}"
+        fi
+      done <"${file}"
+    done < <(echo "${order}" | sed 's/|/\n/g')
+  ;;
+esac
+
+cat "${buffer}"

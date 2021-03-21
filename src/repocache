@@ -1,0 +1,89 @@
+#!/bin/bash
+
+usage() {
+cat <<EOF
+REPOCACHE
+
+Create an intermediate (local) git repository host
+
+Usage: repocache [ACTION] <URL> [OPTS...]
+
+VARIABLES:
+
+RC_DIR
+  Set to the directory that you wish to use for caching
+
+ACTION:
+
+fetch
+  Pull down a repository into the cache
+
+clone
+  Clone from local cache. Treat just like the "git clone" command (including extra flags)
+
+remove
+  Remove an entry from the cache
+
+EOF
+}
+
+set -e
+
+if [ $# -lt 2 ]; then
+  echo "Options may be missing" >&2
+  usage
+  exit 1
+fi
+
+action="${1}"
+url="${2}"
+shift; shift
+
+# Check for RC_DIR
+if [ -z "${RC_DIR}" ]; then
+  echo "RC_DIR is undefined. Please set this variable to a valid directory" >&2
+  exit 2
+fi
+
+# Check if URL
+if ! ( echo "${url}" | grep -qs "^[a-z]*://" ); then
+  echo "Not a valid URL" >&2
+  exit 3
+fi
+
+# Break down URL into parts
+read domain pdir repo < <(echo "${url}" | sed 's@^[a-z]*://@@' | sed 's@/@ @g')
+cachepath="${RC_DIR}/${domain}/${pdir}/${repo}"
+
+case "${action}" in
+  fetch)
+    if [ -d "${cachepath}" ]; then
+      echo "Repo is alread cached" >&2
+      exit 4
+    fi
+    mkdir -p "${cachepath}"
+    git clone "${url}" "${cachepath}"
+  ;;
+
+  clone)
+    if [ ! -d "${cachepath}" ]; then
+      echo "Repo is not cached" >&2
+      exit 5
+    fi
+    git clone "${cachepath}" $@
+  ;;
+
+  remove)
+    if [ ! -d "${cachepath}" ]; then
+      echo "Repo is not cached" >&2
+      exit 6
+    fi
+    rm -rf "${cachepath}"
+  ;;
+
+  *)
+    echo "Invalid usage" >&2
+    usage
+    exit 7
+  ;;
+esac
