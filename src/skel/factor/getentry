@@ -1,0 +1,5 @@
+# getenv <entry>
+wzk-dict -oe \
+  <(wzk-sekt -e -q -t 'entry' "${CONFIG}" "factor_global") \
+  <(wzk-sekt -e -q -t 'entry' "${CONFIG}" "factor") \
+  <(wzk-sekt -e -q -t 'entry' "${CONFIG}" "${1}")

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#usage ../../docs/envrun.md
+
+clean() {
+  rm -f "${tmpscr}"
+}
+trap clean EXIT
+
+set -e
+
+tmpscr="$(mktemp)"
+cat <<EOF >"${tmpscr}"
+#!/bin/sh
+
+set -e
+set -a
+EOF
+
+while [ $# -gt 0 ]; do
+  case "${1}" in
+    -e) shift; echo ". '${1}'" >> "${tmpscr}"; ;;
+    *) break; ;;
+  esac
+  shift
+done
+
+echo "set +a" >> "${tmpscr}"
+echo "$@" >> "${tmpscr}"
+chmod +x "${tmpscr}"
+env - "${tmpscr}"

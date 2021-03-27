@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#usage ../../docs/gitclean.skel
+
+cd "${1}"
+git reset HEAD --hard
+git clean -xfdf

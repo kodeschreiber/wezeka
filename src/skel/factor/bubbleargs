@@ -1,0 +1,30 @@
+# bubbleargs <bubble_name> <entry>
+
+cmdline="$(
+wzk-sekt -t bubble "${CONFIG}" "${1}" | \
+  grep '^venn=' | \
+  cut -d'=' -f2 | \
+  sed "s@^\(.*\)\$@-r ${FDIR}/isolate/bubbles/\1@g" 
+)"
+
+cmdline="${cmdline} $(
+wzk-sekt -t bubble "${CONFIG}" "${1}" | \
+  grep '^bind=' | \
+  cut -d'=' -f2 | \
+  sed 's@/proc@@;s@/dev@@' | \
+  sed "s@^\(.*\)\$@-b ${FDIR}/isolate/bubbles/\1@g"  
+)"
+
+if ( wzk-sekt -t bubble "${CONFIG}" "${1}" | grep '^bind=' | grep -qs '/dev' ); then
+  cmdline="${cmdline} --dev"
+fi
+
+if ( wzk-sekt -t bubble "${CONFIG}" "${1}" | grep '^bind=' | grep -qs '/proc' ); then
+  cmdline="${cmdline} --proc"
+fi
+
+mkdir -p "${FDIR}/bubbles/${1}"
+
+cmdline="${cmdline} --bind ${GITDIR} --chdir ${FDIR}/modules/${2} --diff ${FDIR}/bubbles/${1}"
+
+echo "${cmdline}"

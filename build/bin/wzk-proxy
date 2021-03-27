@@ -1,0 +1,44 @@
+#!/bin/bash
+
+base="$(basename "${0}")"
+
+_usage() {
+  cat <<EOF
+- PROXY -
+
+Usage:
+  Proxy is designed to call subcommands similarly to GIT.
+  To use Proxy, simply symlink to this command, located
+  at $(which proxy), with a name for your custom command.
+  For example, if you create the symlink:
+
+    /usr/bin/example -> $(which proxy)
+
+  Your sub commands would be prefixed 'example-' and be
+  located somewhere in your path. To call these commands,
+  you would do 'example <command> <arg1> ... <argN>'
+EOF
+}
+
+_usage_cmd() {
+  cat <<EOF
+Usage: ${0} COMMAND ARG1 ... ARGN
+
+Commands:
+$(echo "$PATH" | sed 's/:/\n/g' | while read dir; do find "$dir" | grep "${base}-" | sed 's@.*/'${base}'-\(.*\)@  \1@'; done)
+EOF
+}
+
+if [[ "${base}" == *proxy ]]; then
+  _usage
+  exit 0
+fi
+
+cmd="${0}-${1}"
+if ! which "$cmd" >/dev/null; then
+  echo "No such command: ${1}"
+  _usage_cmd
+  exit 1
+fi
+
+$cmd ${@:2}

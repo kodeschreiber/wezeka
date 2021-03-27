@@ -1,0 +1,46 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+ENVIRONMENT RUN
+
+Execute a program with a controlled environment. The environment is created
+with no variables to start, but is populated by the specified environment
+files. The program is then executed.
+
+Usage: dict [-e env1 ... -e envN] CMD ARG1 ... ARGN
+
+OPTIONS:
+
+-e <environment_file>
+
+EOF
+}
+
+clean() {
+  rm -f "${tmpscr}"
+}
+trap clean EXIT
+
+set -e
+
+tmpscr="$(mktemp)"
+cat <<EOF >"${tmpscr}"
+#!/bin/sh
+
+set -e
+set -a
+EOF
+
+while [ $# -gt 0 ]; do
+  case "${1}" in
+    -e) shift; echo ". '${1}'" >> "${tmpscr}"; ;;
+    *) break; ;;
+  esac
+  shift
+done
+
+echo "set +a" >> "${tmpscr}"
+echo "$@" >> "${tmpscr}"
+chmod +x "${tmpscr}"
+env - "${tmpscr}"

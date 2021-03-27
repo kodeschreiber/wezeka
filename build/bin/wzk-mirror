@@ -1,0 +1,39 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+MIRROR
+
+Mirror makes a copy of each specified directory into the
+target rootfs directory
+
+Usage: mirror [dest-dir] srcdir1 ... srcdirN
+EOF
+}
+
+set -e
+
+if [ $# -eq 0 ]; then
+  echo "No destination specified" >&2
+  usage
+  exit 1
+fi
+
+if [ "${1}" == "-h" -o "${1}" == "--help" ]; then
+  usage
+  exit
+fi
+
+if [ -e "${1}" ]; then
+  echo "WARNING: ${1} exists"
+fi
+
+dest="${1}"
+mkdir -p "${dest}"
+shift
+
+for dir in $@; do
+  src="$(realpath "${dir}")"
+  mkdir -p "${dest}${src}"
+  rsync -rlt "${src}/" "${dest}${src}/"
+done

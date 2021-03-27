@@ -1,0 +1,19 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+NOFAIL
+
+Run a script, and exit zero
+
+Usage: nofail CMD ARG1 ... ARGN
+EOF
+}
+
+if [ "${1}" == "-h" -o "${1}" == "--help" ]; then
+  usage
+  exit
+fi
+
+$@
+exit 0

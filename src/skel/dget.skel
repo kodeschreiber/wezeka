@@ -1,0 +1,5 @@
+#!/bin/bash
+
+#usage ../../docs/dget.md
+
+grep "^${1}=" /dev/stdin | cut -d':' -f2

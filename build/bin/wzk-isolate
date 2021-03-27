@@ -1,0 +1,86 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+ISOLATE
+
+Create an overlayed envionment and execute in a
+chroot-like environment
+
+Usage: isolate [OPTION [ARG]] CMD ARG1 ... ARGN
+
+OPTIONS:
+
+-r, --rootfs <dir>
+  Add a folder (rootfs) to be merged readonly in
+  the isloated environment
+
+-b, --bind <dir>
+  Add a folder to bind to the rootfs in the
+  isolated environment
+
+-d, --diff <dir>
+  Directory for all changes made in isolation to
+  be saved to
+
+--dev
+  Bind the /dev directory
+
+--proc
+  Bind the /proc directory
+
+-c, --chdir
+  Specify the working directory in isolation
+EOF
+}
+
+rootfs=""
+bind=""
+diff=""
+chdir="/"
+
+if [ "${1}" == "-h" -o "${1}" == "--help" ]; then
+  usage
+  exit
+fi
+
+while [ $# -gt 0 ]; do
+  case "${1}" in
+    -r|--rootfs)
+      shift
+      if [ ! -d "${1}" ]; then
+        echo "Not a directory: ${1}"
+        exit 2
+      fi
+      rootfs="${rootfs}:$(realpath "${1}")"
+    ;;
+    -b|--bind)
+      shift
+      if [ ! -d "${1}" ]; then
+        echo "Not a directory: ${1}"
+        exit 3
+      fi
+      bind="${bind}--ro-bind ${1} ${1} "
+    ;;
+    -d|--diff) shift; diff="${1}"; ;;
+    --dev) bind="${bind}--dev /dev "; ;;
+    --proc) bind="${bind}--proc /proc "; ;;
+    -c|--chdir) shift; chdir="${1}"; ;;
+    *) break; ;;
+  esac
+  shift
+done
+
+if [ -z "${diff}" ]; then
+  echo "No differential directory specified"
+  exit 4
+fi
+
+owr_bin="$(dirname "${0}")/wzk-overlay_wrap_run"
+if [ ! -x "${owr_bin}" ]; then
+  owr_bin="$(which wzk-overlay_wrap_run)"
+fi
+
+flags="$(echo "${rootfs}" | sed 's/://')"
+
+unshare -rm "${owr_bin}" "${diff}" "${flags}" "${chdir}" "${bind}" $@

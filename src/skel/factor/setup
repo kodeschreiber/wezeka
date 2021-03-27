@@ -1,0 +1,53 @@
+#!/bin/bash
+
+export GITROOT="$(git rev-parse --show-toplevel)"
+export FDIR="${GITROOT}/.factor"
+export CONFIG="${FDIR}/build/config"
+export RC_DIR="${FDIR}/cache"
+
+mkdir -p "${FDIR}/ifio/subroutines" \
+         "${FDIR}/bubbles" \
+         "${FDIR}/cache" \
+         "${FDIR}/pg" \
+         "${FDIR}/modules" \
+         "${FDIR}/build" \
+         "${FDIR}/env" \
+         "${FDIR}/states"
+
+touch "${FDIR}/ifio/mnemoic" \
+      "${FDIR}/build/config"
+
+cat <<EOF >"${FDIR}/build/config"
+[entry factor_global]
+url=""
+tag=master
+prefix="${GITROOT}"
+env=""
+requires=""
+bubble=""
+EOF
+
+cat <<EOF >"${FDIR}/env/factor_default"
+GITROOT="${GITROOT}"
+PREFIX="${GITROOT}"
+IFIO_PATH="${FDIR}/ifio/subroutines"
+EOF
+
+find "${GITROOT}" -type f -name "*.ftr" | \
+while read file; do
+  cat "${file}" >> "${FDIR}/build/config"
+done
+
+# Output subroutines
+egrep '\[\s*routine .*\]' "${CONFIG}" | \
+  sed 's/\[\s*routine //;s/\]\s*$//' | \
+  while read sect; do
+    wzk-sekt -t 'routine' "${CONFIG}" "${sect}" > "${FDIR}/ifio/subroutines/${sect}"
+  done
+
+# Output environments
+egrep '\[\s*env .*\]' "${CONFIG}" | \
+  sed 's/\[\s*env //;s/\]\s*$//' | \
+  while read sect; do
+    wzk-sekt -t 'env' "${CONFIG}" "${sect}" > "${FDIR}/env/${sect}"
+  done

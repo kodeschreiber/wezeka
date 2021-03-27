@@ -1,5 +1,0 @@
-#!/bin/bash
-
-while read line; do
-  echo -n "$(echo -n "${line} ")"
-done

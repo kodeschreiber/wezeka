@@ -1,29 +1,55 @@
-#!/bin/bash
+# build <entry>
 
-# _build <resource>
-mkdir -p "${f_moddir}"
+# Check build requirements
+wzk-unxargs $(wzk-sekt -t 'entry' "${CONFIG}" "${1}") | \
+while read req; do
+  if ! wzk-factor build "${req}"; then
+    elog "Failed to build ${1}"
+    return 1
+  fi 
+done
 
-cat <<EOF >"${f_script_file}"
-$(wzk-sekt -e -q -p 'export ' -t 'env' "${f_entry_conf}" default_factor_env)
-$(wzk-sekt -e -q -p 'export ' -t 'env' "${CONFIG}" $f_env)
-# BEGIN SCRIPT
-EOF
-wzk-sekt -n -t 'exec' "${CONFIG}" $f_exec >> "${f_script_file}"
-chmod +x "${f_script_file}"
-curr_hash="$(md5sum "${f_script_file}" | head -c32)"
+# Check if rebuild is necessary
+touch "${FDIR}/build/states/${1}"
+cstate="$(_sumstate "${1}")"
+if grep -qs "${cstate}" "${FDIR}/build/states/${1}"; then
+  return 0  # No need to rebuild
+fi
+echo "${cstate}" > "${FDIR}/build/states/${1}"
 
-_depcheck "${1}"
-if [ $? -ne 13 ]; then
-  _sync "${1}"
+# Sync repository (if defined)
+url="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget url)"
+tag="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget tag)" 
+
+if [ ! -z "${url}" ]; then
+  repocache fetch "${url}"
 fi
 
-(
-mkdir -p "${f_module}"
-env -C "${f_module}" -i "${f_script_file}" 2>&1 | @v "$(@s "${1}" 4 "Building")"
-exit ${PIPESTATUS[0]}
-)
-@einz "Failed to build package ${1}"
+if [ -d "${FDIR}/modules/${1}" ]; then
+  wzk-gitclean "${FDIR}/modules/${1}" 1>/dev/null 2>/dev/null
+else
+  repocache clone "${url}" -t "${tag}" "${FDIR}/modules/${1}"
+fi
 
-_wrapup "${1}"
+# Add prefix to environemnt (if defined)
+echo "PREFIX=\"$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget prefix)\"" > "${FDIR}/env/factor_spec"
 
-return 11
+# Compose command string
+cmd="runenv -e ${FDIR}/env/factor_default -e ${FDIR}/env/factor_spec"
+cmd="${cmd} $(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget env | sed 's/\([^ ]*\)/-e \1/g')"
+
+bubble="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget bubble)"
+if [ ! -z "${bubble}" ]; then
+  cmd="${cmd} $(_bubbleargs ${bubble} ${1})"
+fi
+
+routine="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget routine)"
+if [ ! -z "${routine}" ]; then
+  cmd="${cmd} ${FDIR}/ifio/subroutines"
+else
+  cmd="${cmd} ifio -m \"${FDIR}/ifio/mnemonic\" -v -k wzk-gitclean"
+fi
+
+# Execute build
+$cmd
+return $?

@@ -1,0 +1,4 @@
+# getenv <entry>
+cd "${FDIR}/env"
+wzk-dict -on $(_getentry "${1}" grep '^env=' | cut -d'=' -f2)
+cd -

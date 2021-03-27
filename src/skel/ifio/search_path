@@ -1,0 +1,7 @@
+# search_path <script_name>
+echo "${IFIO_PATH}" | sed 's/:/\n/g' | \
+  while read dir; do
+    if (find "${dir}" -type f -maxdepth 1 | grep -qs "${1}$" ); then
+      echo "${dir}"
+    fi
+  done

@@ -1,0 +1,442 @@
+#!/bin/bash
+
+trap 'rm -rf "${TMPDIR}"' EXIT
+
+TMPDIR="$(mktemp -d)"
+CONFIG="${TMPDIR}/config"
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+FACTDIR="${GIT_ROOT}/.factor"
+LEVEL=0
+LVLBAR="$(printf "%${LEVEL}s" | sed 's/ /|/g')"
+BARMAX=7
+
+#!/bin/bash
+
+NONE="\033[0m"
+ORANGE="\033[0;33m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+GRAY="\033[0;37m"
+
+exec 3>&1 4>&2
+
+@p() {
+  echo -e "${LVLBAR}\033[0;32m- ${@}\033[0m"
+}
+
+@e() {
+  echo -e "${LVLBAR}\033[0;31m! ${@}\033[0m" >&4
+  exit 1
+}
+
+@d() {
+  echo -e "\033[1;34m? ${@}\033[0m" >&3
+}
+
+@einz() {
+  if [ $? -ne 0 ]; then
+    @e $@
+  fi
+}
+
+# @s <entry> <progress> <status> <clear>
+@s() {
+  if [ ! -z "${4}" ]; then
+    printf "\r%*s\r" $COLUMNS
+  fi
+  echo -ne "${LVLBAR} ${GRAY}${1} ${ORANGE}[${GREEN}$(printf "%${2}s" | sed 's/ /=/g')$(printf "%$(($BARMAX - ${2}))s" | sed 's/ /-/g')${ORANGE}] ${3}${NONE}"
+}
+
+# f_verbose='' @v <normal_string>
+@v() {
+  if [ "$(cat /proc/$PPID/comm)" != "git-factor" -a "$(cat /proc/$PPID/comm)" != "wzk-factor" -a "$(cat /proc/$PPID/comm)" != "git" -a "$(cat /proc/$PPID/comm)" != "wzk" ]; then
+    cat /proc/$PPID/comm >> /tmp/factor.log
+  fi
+  if [ "$(cat /proc/$PPID/comm)" == "git-factor" -o "$(cat /proc/$PPID/comm)" == "wzk-factor" -o "$(cat /proc/$PPID/comm)" == "git" -o "$(cat /proc/$PPID/comm)" == "wzk" ]; then
+    echo "${1}"
+    cat /dev/stdin
+  elif [ "${f_verbose}" == "true" ]; then
+    wzk-chaser "${1}"
+  else
+    echo "${1}"
+    cat 2>&1 >/dev/null
+  fi
+}
+
+DEBUG="${DEBUG:-}"
+#BARMAX=-1
+shopt -s extdebug
+test ! -z $DEBUG && trap '@d ${BASH_COMMAND}' DEBUG
+
+_usage(){
+cat <<'EOF'
+# FACTOR
+---
+Factor is a build assistant tool designed to make organizing modules and their construction much easier. It is installed as a GIT plugin.
+
+When running the `git factor` command, you must be in the target directory containing these files.
+
+---
+
+## Command Usage:
+git factor OPERATION TARGET1 ... TARGETn  
+
+OPERATIONS:
+  - build:
+      Firstly ensures that the '.factor' directory exists. Then, ensures the
+      basic directory structure for the module is present. Git submodule is
+      then used to add/update the module. Then, check if the build needs to
+      continue; if the tag or buildscript change, or if the 'cache' directory
+      for the module is missing, then proceed, otherwise, exit 11. Attempt to
+      build each prerequiste. If successful, create cache directory and clean
+      the git module directory. If isolation is not set, set the environment
+      variables and run the buildscript. Otherwise, create a bind-mount for
+      the root and module directories in the cache, chroot into the cache,
+      and execute the buildscript. Absolute paths defined in the PATH and
+      LD_LIBRARY_PATH are converted for the chroot environment. Finally,
+      copy the contents of the cache into the 'prefix' directory.
+
+  - clean:
+      Remove the modules '.factor' directory
+---
+
+## Installation
+Here's a simple layout diagram:  
+
+![factor_diagram](factor.png)
+
+Factor only requires a few things:
+1. One or more '<filename>.ftr' files in the git repository
+2. Commands: rsync, git
+
+Simply run `make install` to install the binary. To set a custom path, do `make PREFIX='<path>' install`
+
+---
+
+## FTR files
+FTR files can be located anywhere in your git repository. FTR files are essentially
+`ini` files. In fact, they are desinged the same way that GIT configs are.
+
+There are three types of sections you may use:
+  - entry
+  - exec
+  - env
+
+Meta sections are structured as:
+```
+[entry name]
+  url=
+  tag=
+  prefix=
+  env=env1 ... envN
+  exec=exec1 ... execN
+  requires=req1 ... reqN
+  noclean=true|false
+  verbose=true|false
+  freeze=true|false
+```
+Here are the rules to the CONF file:
+1. `url` should specify the location to the target GIT repository. It is required.
+2. `tag` must be a valid tag in that repository. The default is `master`
+3. `requires` is a space-separated list of other resource names. They will be built first.
+4. `env` is a space-separated list of section names in the `factor.conf`. Add entries to those sections; this will automatically export shell variables for your build scripts (no need to put 'export')
+5. `prefix` is the final destination of your resource's build. It will given as the variable `PREFIX` in your build script. This value changes if `isolate` is defined. You may also use the `%git%` variable to specify the path your GIT project root.
+6. `script` is the location of the buildscript to execute in the module's directory. The scipt must be set as execuatble. You may use the `%git%` syntax to specifiy the location.
+
+Exec sections are free-form. They should be treated as parts to a script, later combined by reference in the `entry` section. Here's what one could look like:
+```
+[exec name]
+#!/bin/bash
+
+echo hello world
+```
+
+Env sections are structured as:
+```
+[env name]
+PATH=/bin:/usr/bin
+CUSTOM_VAR=foo
+CC=/usr/bin/gcc
+```
+
+Note that you do not need to put the `export` keyword. This is done automatically.
+
+There is one reserved section called `factor` used to define global properties for
+your repository. It is not required, but can be used to override default values as
+outlined below:
+```
+[factor]
+
+```
+---
+
+## Build Variables
+The following variables are injected to every buildscript's environment:
+
+- PREFIX_CACHE - Path to the `<gitfolder>/.factor/<module>/cache` directory.
+- PREFIX_BUILD - Path defined by the `prefix` variable in the factor.conf
+- GIT_ROOT - Path to the parent git directories root.
+EOF
+}
+
+_compose_config(){
+
+find "${GIT_ROOT}" -not \( -path "${GIT_ROOT}/.factor" -prune \) \
+     -type f -name '*.ftr' -exec cat {} + > "${CONFIG}"
+cat <<"EOF" >>"${CONFIG}"
+[entry default_factor_values]
+tag=master
+prefix="${GIT_ROOT}"
+noclean=false
+verbose=false
+freeze=false
+EOF
+}
+
+_get_resource(){
+
+# _get_resource <resource>
+
+set -a
+source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "default_factor_values")
+source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "factor")
+cat <<EOF >>"${CONFIG}"
+[entry ${1}_defaults]
+env=${f_env} ${1}
+exec=${1}
+EOF
+source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "${1}_defaults")
+ENV="${f_env}"
+source <(wzk-sekt -e -q -p 'f_' -t 'entry' "${CONFIG}" "${1}")
+set +a
+
+# test ! -z "${f_url}"
+# @einz "No url defined for ${1}"
+test ! -z "${f_prefix}"
+@einz "No prefix provided for ${1}"
+test ! -z "${f_exec}"
+@einz "No script sections specified for ${1}"
+
+f_moddir="${FACTDIR}/${1}"
+f_meta="${f_moddir}/meta"
+f_cache="${f_moddir}/cache"
+f_module="${f_moddir}/module"
+f_frozen="${f_moddir}/${1}_module.tar.gz"
+f_rmodule="${RFACTDIR}/${1}/module"
+f_script_file="${TMPDIR}/${1}.sh"
+f_entry_conf="${TMPDIR}/${1}.conf"
+
+if [ -z "${f_url}" ]; then  # For execute-only situations
+  f_module="${f_prefix}"
+fi
+
+cat <<EOF >"${f_entry_conf}"
+[env default_factor_env]
+PREFIX_CACHE="${f_cache}"
+PREFIX_BUILD="${f_prefix}"
+GIT_ROOT="${GIT_ROOT}"
+EOF
+}
+
+_depcheck(){
+
+deprebuilt=0
+pass="${GREEN}✔${NONE}"
+fail="${RED}✗${NONE}"
+
+if [ ! -f "${f_meta}" ]; then touch "${f_meta}"; fi
+source <(wzk-sekt -e -q -p 'export lock_' -t 'metadata' "${f_meta}" "${1}")
+
+@s "${1}" 0 "Checking dependencies\n"
+_iter_deps() {
+while read req; do
+  if [ -z "${req}" ]; then continue; fi
+  env -i PATH="${PATH}" LEVEL=$(($LEVEL + 1)) $0 build "${req}"
+  case $? in
+    12) continue; ;;
+    11) deprebuilt=1; ;;
+    *) @e "Requirement '${req}' for resource '${1}' failed to build"; ;;
+  esac
+done < <(echo "${f_requires}" | sed 's/ /\n/g')
+}
+_iter_deps # | @v "$(@s "${1}" 0 "Checking dependencies")"
+
+if [ -z "${f_url}" ]; then
+  return 13
+fi
+
+d_deps="${fail}"
+d_cache="${fail}"
+d_script="${fail}"
+d_tag="${fail}"
+
+if [ $deprebuilt -ne 1 ]; then d_deps="${pass}"; fi
+if [ -d "${f_cache}" ]; then d_cache="${pass}"; fi
+if [ "${curr_hash}" == "${lock_hash}" ]; then d_script="${pass}"; fi
+if [ "${f_tag}" == "${lock_tag}" ]; then d_tag="${pass}"; fi
+
+echo -e "$(printf "${LVLBAR} ${ORANGE}Rebuild checks:${NONE} Depends [%s] Cache [%s] Script [%s] Tag [%s]" "${d_deps}" "${d_cache}" "${d_script}" "${d_tag}")"
+
+if [ $deprebuilt -ne 1 -a -d "${f_cache}" -a \
+  "${curr_hash}" == "${lock_hash}" -a "${f_tag}" == "${lock_tag}" ]; then
+  _wrapup "${1}"
+  exit 12
+fi
+}
+
+_sync(){
+
+_clear_cache() {
+  rm -rf "${f_cache}"
+  mkdir -p "${f_cache}"
+}
+_clear_cache | @v "$(@s "${1}" 1 "Cleaning" clean)"
+
+_handle_repo() {
+  if [ "${f_freeze}" == "true" ]; then
+    if [ ! -f "${f_frozen}" -a ! -d "${f_module}" ]; then
+      git clone "${f_url}" --depth 1 -b "${f_tag}" "${f_module}"
+      (
+        cd "${f_module}"
+        git fetch --unshallow
+      )
+      @einz "Could not pull the module ${1}"
+    fi
+
+    if [ ! -f "${f_frozen}" ]; then
+      (
+        cd "${f_moddir}"
+        tar zcvf "${f_frozen}" module
+      )
+      @einz "Unable to freeze repository"
+    fi
+
+    if [ ! -d "${f_module}" ]; then
+      (
+        cd "${f_moddir}"
+        tar zxvf "${f_frozen}"
+      )
+      @einz "Unable to thaw repository"
+    fi
+  else
+    if [ ! -z "${f_url}" -a ! -d "${f_module}" ]; then
+      git clone "${f_url}" --depth 1 -b "${f_tag}" "${f_module}"
+      (
+        cd "${f_module}"
+        git fetch --unshallow
+      )
+      @einz "Could not pull the module ${1}"
+    fi
+  fi
+}
+_handle_repo | @v "$(@s "${1}" 2 "Checking module")"
+
+pushd "${f_module}" >/dev/null
+_clean_repo() {
+  test "${GIT_ROOT}" != "$(git rev-parse --show-toplevel)"
+  @einz "Refusing to build; target git directory is the parent not the submodule: '${1}'"
+
+  if [ "${f_freeze}" != true ]; then
+    git fetch --all >/dev/null
+    git checkout "${f_tag}" 2>/dev/null
+  fi
+
+  git reset --hard "${f_tag}" >/dev/null
+  git clean -xfdf
+}
+_clean_repo | @v "$(@s "${1}" 3 "Cleaning module")"
+popd >/dev/null
+}
+
+_wrapup(){
+
+_sync_to_build() {
+  mkdir -p "${f_prefix}"
+  rsync -av "${f_cache}/" "${f_prefix}/"
+}
+
+if [ ! -z "${f_url}" ]; then
+  _sync_to_build | @v "$(@s "${1}" 5 "Syncing")"
+fi
+
+@s "${1}" 6 "Updating locks" clear
+cat <<EOF >"${f_meta}"
+[metadata ${1}]
+hash=${curr_hash}
+tag=${f_tag}
+EOF
+
+@s "${1}" 7 "Done" clear
+echo
+}
+
+_interflat(){
+
+while read line; do
+  echo -n "$(echo -n "${line} ")"
+done
+}
+
+_build(){
+
+# _build <resource>
+mkdir -p "${f_moddir}"
+
+cat <<EOF >"${f_script_file}"
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${f_entry_conf}" default_factor_env)
+$(wzk-sekt -e -q -p 'export ' -t 'env' "${CONFIG}" $f_env)
+# BEGIN SCRIPT
+EOF
+wzk-sekt -n -t 'exec' "${CONFIG}" $f_exec >> "${f_script_file}"
+chmod +x "${f_script_file}"
+curr_hash="$(md5sum "${f_script_file}" | head -c32)"
+
+_depcheck "${1}"
+if [ $? -ne 13 ]; then
+  _sync "${1}"
+fi
+
+(
+mkdir -p "${f_module}"
+env -C "${f_module}" -i "${f_script_file}" 2>&1 | @v "$(@s "${1}" 4 "Building")"
+exit ${PIPESTATUS[0]}
+)
+@einz "Failed to build package ${1}"
+
+_wrapup "${1}"
+
+return 11
+}
+
+_clean(){
+
+rm -rf "${f_cache}" "${f_meta}" "${f_module}"
+}
+
+mkdir -p "${FACTDIR}"
+if ! grep -qs '^.factor' "${GIT_ROOT}/.gitignore"; then
+  echo ".factor" >> "${GIT_ROOT}/.gitignore"
+fi
+
+_compose_config
+
+if [ $# -lt 2 ]; then
+  _usage
+  @e "Too few arguments"
+fi
+
+OPER="${1}"
+shift
+
+while [ $# -gt 0 ]; do
+  if [ $(wzk-sekt -e -q -t 'entry' "${CONFIG}" "${1}" | wc -l) -lt 1 ]; then
+    @e "Entry '${1}' is not a valid entry"
+  fi
+  _get_resource "${1}"
+  case "${OPER}" in
+    build) _build "${1}"; exit $?; ;;
+    clean) _clean "${1}"; ;;
+    *) _usage; exit 1; ;;
+  esac
+  shift
+done
