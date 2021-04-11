@@ -9,6 +9,7 @@
 #hfunc ./factor/build
 #hfunc ./factor/clean
 #hfunc ./factor/reset
+#hfunc ./factor/tree
 
 #hfunc ./factor/bubbleargs
 #hfunc ./factor/getentry

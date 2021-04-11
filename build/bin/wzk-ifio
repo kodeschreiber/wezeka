@@ -160,7 +160,7 @@ return $res
 
 add_git(){
 if [ -z "$(which git)" ]; then
-  ifio-msg "Cannot autoclean; not git executable present"
+  ifio_msg "Cannot autoclean; not git executable present"
 elif [ ! -d .git ]; then
   git init .
   touch .ifio_git
@@ -171,7 +171,7 @@ fi
 
 cln_git(){
 if [ -z "$(which git)" ]; then
-  ifio-msg "Cannot autoclean; not git executable present"
+  ifio_msg "Cannot autoclean; not git executable present"
 else
   git reset HEAD --hard
   git clean -xfdf
