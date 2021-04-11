@@ -2,6 +2,8 @@
 
 #usage ../../docs/overlay_wrap_run.md
 
+#set -xv
+
 cleanup() {
   umount "${mntdir}"
   rm -rf "${hidden}"
@@ -20,7 +22,17 @@ workdir="${hidden}/work"
 mntdir="${hidden}/mnt"
 diffdir="${hidden}/diff"
 
+if [ ! -z "${diffdir}" ]; then
+  udir="upperdir=${diffdir},"
+fi
+if [ ! -z "${rootfs}" ]; then
+  ldir="lowerdir=${rootfs},"
+fi
+if [ ! -z "${workdir}" ]; then
+  wdir="workdir=${workdir}"
+fi
+
 mkdir -p "${diffdir}" "${workdir}" "${mntdir}" "${diff}"
-mount -t overlay overlay -oupperdir="${diffdir}",lowerdir="${rootfs}",workdir="${workdir}" "${mntdir}"
+mount -t overlay overlay -o"${udir}${ldir}${wdir}" "${mntdir}"
 bwrap --bind "${mntdir}" / $bind --chdir "${chdir}" $@
 rsync -a "${diffdir}/" "${diff}/"

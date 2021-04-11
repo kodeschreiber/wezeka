@@ -1,55 +1,56 @@
-# build <entry>
-
-# Check build requirements
-wzk-unxargs $(wzk-sekt -t 'entry' "${CONFIG}" "${1}") | \
-while read req; do
-  if ! wzk-factor build "${req}"; then
-    elog "Failed to build ${1}"
-    return 1
-  fi 
-done
-
-# Check if rebuild is necessary
-touch "${FDIR}/build/states/${1}"
-cstate="$(_sumstate "${1}")"
-if grep -qs "${cstate}" "${FDIR}/build/states/${1}"; then
-  return 0  # No need to rebuild
-fi
-echo "${cstate}" > "${FDIR}/build/states/${1}"
-
-# Sync repository (if defined)
-url="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget url)"
-tag="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget tag)" 
-
-if [ ! -z "${url}" ]; then
-  repocache fetch "${url}"
+if [ ! -d "${ENTRYDIR}/${1}" ]; then
+  elog "No such entry: ${1}; You may to run 'wzk factor refresh'"
+  exit 1
 fi
 
-if [ -d "${FDIR}/modules/${1}" ]; then
-  wzk-gitclean "${FDIR}/modules/${1}" 1>/dev/null 2>/dev/null
+if [ "${2}" == "-f" -o "${2}" == "--force" ]; then
+  rm -f "${ENTRYDIR}/${1}/state"
+fi
+touch "${ENTRYDIR}/${1}/state"
+
+plog "Checking state for ${1}"
+state="$(_sumstate "${1}")"
+if [ "$(cat "${ENTRYDIR}/${1}/state")" == "${state}" ]; then
+  exit 0  
 else
-  repocache clone "${url}" -t "${tag}" "${FDIR}/modules/${1}"
+  wlog "Change detected for ${1}"
 fi
 
-# Add prefix to environemnt (if defined)
-echo "PREFIX=\"$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget prefix)\"" > "${FDIR}/env/factor_spec"
+export `_getentry "${1}" | sed 's/^/f_/'`
 
-# Compose command string
-cmd="runenv -e ${FDIR}/env/factor_default -e ${FDIR}/env/factor_spec"
-cmd="${cmd} $(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget env | sed 's/\([^ ]*\)/-e \1/g')"
-
-bubble="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget bubble)"
-if [ ! -z "${bubble}" ]; then
-  cmd="${cmd} $(_bubbleargs ${bubble} ${1})"
+if [ ! -z "${f_url}" -a ! -d "${ENTRYDIR}/${1}/module" ]; then
+  plog "Syncing repository"
+  export RC_DIR="${CACHEDIR}"
+  wzk-repocache fetch "${f_url}" 1>/dev/null 2>/dev/null
+  wzk-repocache clone "${f_url}" -b "${f_tag}" "${ENTRYDIR}/${1}/module" 1>/dev/null 2>/dev/null
 fi
 
-routine="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget routine)"
-if [ ! -z "${routine}" ]; then
-  cmd="${cmd} ${FDIR}/ifio/subroutines"
+if [ ! -d "${ENTRYDIR}/${1}/module" ]; then
+  mkdir -p "${ENTRYDIR}/${1}/module"
+fi
+
+envs="$(echo "${f_env}" | sed "s@^@ -e ${ENVDIR}/@g")"
+script=""
+if [ ! -z "${f_exec}" ]; then
+  script="-u ${f_exec}"
+fi
+
+#set -xv
+
+if [ -z "${f_endo}" -o "${f_endo}" == '""' ]; then
+  wzk-runenv -e "${ENVDIR}/factor_default" $envs \
+  wzk-ifio -c "${ENTRYDIR}/${1}/module" -m "${MNEMONIC}" -v -k $script
+  res=$?
 else
-  cmd="${cmd} ifio -m \"${FDIR}/ifio/mnemonic\" -v -k wzk-gitclean"
+  printf "\033[0;31mWARNING: \033[0;33mIsolation may prevent some aspects "
+  printf "of IFIO \nfrom working properly (such as colorization and cleanup).\033[0m\n"
+  mkdir -p "${ENDODIR}/${f_endo}"
+  wzk-runenv -e "${ENVDIR}/factor_default" $envs -e "${ENVDIR}/factor_isolation" \
+  wzk-isolate $(_bubbleargs "${f_endo}" "${1}") \
+  wzk-ifio -c "${ENTRYDIR}/${1}/module" -m "${MNEMONIC}" -v -k $script
+  res=$?
 fi
 
-# Execute build
-$cmd
-return $?
+if [ $res -eq 0 ]; then
+  echo "${state}" > "${ENTRYDIR}/${1}/state"
+fi

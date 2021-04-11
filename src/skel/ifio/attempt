@@ -1,11 +1,12 @@
 # attempt <script>
-ifio_msg "[IFIO] [ ] ${1}"
+ifio_msg none "${1}\n"
 run_script "${1}"
 res=$?
+cln_git
 if [ $res -eq 0 ]; then
-  ifio_msg "\r[IFIO] [✔] ${1}\n"
+  ifio_msg pass "${1}\n"
   update_mnemonic "${1}"
 else
-  ifio_msg "\r[IFIO] [✗] ${1}\n"
+  ifio_msg fail "${1}\n"
 fi
 return $res

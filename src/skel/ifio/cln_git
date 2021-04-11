@@ -1,0 +1,6 @@
+if [ -z "$(which git)" ]; then
+  ifio_msg "Cannot autoclean; not git executable present"
+else
+  git reset HEAD --hard
+  git clean -xfdf
+fi

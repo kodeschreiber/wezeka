@@ -18,8 +18,8 @@ OPTIONS:
   -q,--quiet
     Do not print IFIO messages. Default is not quiet
 
-  -k,--clean <path_to_script>
-    Run a cleaning script in the directory between each build attempt
+  -k,--colorize
+    Filter STDOUT (white), STDERR (red), and Pipe 3 (blue)
 
   -d,--dump <script>
     Print a list of the importatint environment variables defined in specified script

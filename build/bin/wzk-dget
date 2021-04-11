@@ -1,0 +1,13 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+DICTIONARY GET
+
+Get the value from a dictionary (formatted: key=value)
+
+Usage: *stdin* | dget <key>
+EOF
+}
+
+grep "^${1}=" /dev/stdin | cut -d':' -f2

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#usage ../../docs/envrun.md
+#usage ../../docs/runenv.md
 
 clean() {
   rm -f "${tmpscr}"

@@ -1,1 +1,1 @@
-printf "X \033[0;31m${@}\033[0m\n" >> "${FDIR}/pg/progress"
+printf "\033[0;31mX ${@}\033[0m\n"

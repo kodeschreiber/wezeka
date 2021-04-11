@@ -22,8 +22,8 @@ OPTIONS:
   -q,--quiet
     Do not print IFIO messages. Default is not quiet
 
-  -k,--clean <path_to_script>
-    Run a cleaning script in the directory between each build attempt
+  -k,--colorize
+    Filter STDOUT (white), STDERR (red), and Pipe 3 (blue)
 
   -d,--dump <script>
     Print a list of the importatint environment variables defined in specified script
@@ -74,23 +74,66 @@ EOF
 }
 
 ifio_msg(){
-if [ $quiet -ne 1 ]; then
-  if [ $verbose -ne 1 ]; then
-    echo -ne "${@}"
-  else
-    echo "${@}" | sed 's/\\r//g;s/\\n//g'
+# ifio_msg <message>
+# ifio_msg [pass|fail|none] <message>
+
+if [ $quiet -eq 1 ]; then
+  return
+fi
+
+CLEAR='\033[0m'
+ORANGE='\033[0;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+
+total_msg="[IFIO] "
+status=''
+msg_color=''
+stat_color=''
+clr_color=''
+
+if [ $colorize -eq 1 ]; then
+  msg_color="${ORANGE}"
+  clr_color="${CLEAR}"
+  if [ $# -eq 2 ]; then
+    case "${1}" in
+      pass) stat_color="${GREEN}"; ;;
+      fail) stat_color="${RED}"; ;;
+    esac
   fi
+fi
+
+if [ $# -eq 2 ]; then
+  case "${1}" in
+    pass) status="${msg_color}[${stat_color}✔${msg_color}]"; ;;
+    fail) status="${msg_color}[${stat_color}✗${msg_color}]"; ;;
+    none) status="${msg_color}[${stat_color} ${msg_color}]"; ;;
+  esac
+  shift
+fi
+
+total_msg="${msg_color}${total_msg}${status} ${1}${clr_color}"
+
+if [ $verbose -ne 1 ]; then
+  printf "${total_msg}\n"
+else
+  printf "${total_msg}" | sed 's/\\r//g'
 fi
 }
 
-run_script(){
+run_script()(
 # run_script <script>
 if [ $verbose -ne 1 ]; then
   exec 1>/dev/null 2>/dev/null
 fi
-$@
+
+if [ $colorize -eq 1 ]; then
+  wzk-colorize $@
+else
+  $@
+fi
 exit $?
-}
+)
 
 update_mnemonic(){
 # update_mnemonic <script>
@@ -102,23 +145,62 @@ fi
 
 attempt(){
 # attempt <script>
-ifio_msg "[IFIO] [ ] ${1}"
+ifio_msg none "${1}\n"
 run_script "${1}"
 res=$?
+cln_git
 if [ $res -eq 0 ]; then
-  ifio_msg "\r[IFIO] [✔] ${1}\n"
+  ifio_msg pass "${1}\n"
   update_mnemonic "${1}"
 else
-  ifio_msg "\r[IFIO] [✗] ${1}\n"
+  ifio_msg fail "${1}\n"
 fi
 return $res
 }
 
+add_git(){
+if [ -z "$(which git)" ]; then
+  ifio-msg "Cannot autoclean; not git executable present"
+elif [ ! -d .git ]; then
+  git init .
+  touch .ifio_git
+  git add .
+  git commit -m "IFIO CHECKPOINT"
+fi
+}
+
+cln_git(){
+if [ -z "$(which git)" ]; then
+  ifio-msg "Cannot autoclean; not git executable present"
+else
+  git reset HEAD --hard
+  git clean -xfdf
+fi
+}
+
+rem_git(){
+if [ -f .ifio_git ]; then
+  rm -rf .git .ifio_git
+fi
+}
+
+search_path(){
+# search_path <script_name>
+echo "${IFIO_PATH}" | sed 's/:/\n/g' | \
+  while read dir; do
+    if (find "${dir}" -type f -maxdepth 1 | grep -qs "${1}$" ); then
+      echo "${dir}/${1}"
+    fi
+  done
+}
+
+trap rem_git EXIT
+
 chdir="${1:-./}"
 
-# Check for IFIO_SCRIPT_DIR
-if [ -z "${IFIO_SCRIPT_DIR}" ]; then
-  echo "IFIO_SCRIPT_DIR is undefined. Please set this variable to a valid directory" >&2
+# Check for IFIO_PATH
+if [ -z "${IFIO_PATH}" ]; then
+  echo "IFIO_PATH is undefined. Please set this variable to a valid directory or directories" >&2
   exit 1
 fi
 
@@ -126,8 +208,9 @@ chdir="./"
 mnemonic=""
 verbose=0
 quiet=0
-clean=""
+colorize=0
 dump=""
+use=""
 
 while [ $# -gt 0 ]; do
   case "${1}" in
@@ -135,10 +218,11 @@ while [ $# -gt 0 ]; do
     -m|--mnemonic) shift; mnemonic="$(realpath "${1}")"; ;;
     -v|--verbose) verbose=1; ;;
     -q|--quiet) quiet=1; ;;
-    -k|--clean) shift; clean="${1}"; ;;
-    -h|--help) usage; exit; ;;
+    -k|--colorize) colorize=1; ;;
+    -h|--help) _usage; exit; ;;
     -d|--dump) shift; dump="${1}"; ;;
-    *) echo "Unknown option" >&2; usage; exit 2; ;;
+    -u|--use) shift; use="${1}"; ;;
+    *) echo "Unknown option" >&2; _usage; exit 2; ;;
   esac
   shift
 done
@@ -146,7 +230,7 @@ done
 # Check for dump
 if [ ! -z "${dump}" ]; then
   dmpscr="$(which wzk-dumpvars)"
-  env - SOV="set -a" EOV="source ${dmpscr:-./wzk-dumpvars}" "${IFIO_SCRIPT_DIR}/${dump}"
+  env - SOV="set -a" EOV="source ${dmpscr:-./wzk-dumpvars}" "$(search_path "${dump}")"
   exit
 fi
 
@@ -156,32 +240,30 @@ fi
 
 cd "${chdir}"
 
+add_git
+
+# If "use" was specified, try it
+if [ ! -z "${use}" ]; then
+  if [ -f "$(search_path "${use}")" ]; then
+    attempt "$(search_path "${use}")" && exit 0  # Exit if successful
+  fi
+fi
+
 # Try to run the cached option
 if [ -f "${mnemonic}" ]; then
   firsttry="$(grep "$(pwd)" "${mnemonic}" | cut -d':' -f2)"
-  if [ ! -z "${firsttry}" -a -f "${IFIO_SCRIPT_DIR}/${firsttry}" ]; then
-    attempt "${IFIO_SCRIPT_DIR}/${firsttry}"
-    if [ $? -eq 0 ]; then
-      exit 0
-    else
-      if [ ! -z "${clean}" ]; then
-        $clean
-      fi
-    fi
+  if [ ! -z "${firsttry}" -a -f "$(search_path "${firsttry}")" ]; then
+    attempt "$(search_path "${firsttry}")" && exit 0  # Exit if successful
   fi
 fi
 
 # Try all scripts
-for scr in ${IFIO_SCRIPT_DIR}/*; do
-  attempt "${scr}"
-  if [ $? -eq 0 ]; then
-    exit 0
-  else
-    if [ ! -z "${clean}" ]; then
-      $clean
-    fi
-  fi
-done
+echo "${IFIO_PATH} | sed 's/:/\n/g'" | \
+while read dir; do
+  for scr in ${dir}/*; do
+    attempt "${scr}" && exit 0  # Exit if successful
+  done
+done #< <(echo "${IFIO_PATH} | sed 's/:/\n/g'")
 
 ifio_msg "Unable to build with given scripts\n"
 exit 1

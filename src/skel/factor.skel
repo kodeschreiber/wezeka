@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#usage ../../docs/factor.md
+
+#func ./factor/plog
+#func ./factor/wlog
+#func ./factor/elog
+
+#hfunc ./factor/build
+#hfunc ./factor/clean
+#hfunc ./factor/reset
+
+#hfunc ./factor/bubbleargs
+#hfunc ./factor/getentry
+#hfunc ./factor/sumstate
+
+#hfunc ./factor/setup
+#hfunc ./factor/vars
+
+action="${1}"
+target="${2}"
+flag="${3}"
+
+_vars
+
+case "${action}" in
+  build)   _build "${target}" "${flag}"; ;;
+  refresh) _setup; ;;
+  reset)   _reset; ;;
+  clean)   _clean "${target}"; ;;
+  conduct) _tree "${target}" "${flag}"; ;;
+  *)       _usage; exit 1; ;;
+esac

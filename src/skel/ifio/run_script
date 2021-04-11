@@ -2,5 +2,10 @@
 if [ $verbose -ne 1 ]; then
   exec 1>/dev/null 2>/dev/null
 fi
-$@
+
+if [ $colorize -eq 1 ]; then
+  wzk-colorize $@
+else
+  $@
+fi
 exit $?

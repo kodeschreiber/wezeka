@@ -1,0 +1,6 @@
+#!/bin/bash
+
+#usage ../../docs/colorize.md
+
+set -o pipefail
+"$@" 1> >(sed $'s,.*,\e[37m&\e[m,'>&1) 2> >(sed $'s,.*,\e[31m&\e[m,'>&2) 3> >(sed $'s,.*,\e[34m&\e[m,'>&1)

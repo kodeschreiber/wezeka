@@ -4,11 +4,21 @@
 
 #func ./ifio/ifio_msg
 
-#func ./ifio/run_script
+#sfunc ./ifio/run_script
 
 #func ./ifio/update_mnemonic
 
 #func ./ifio/attempt
+
+#func ./ifio/add_git
+
+#func ./ifio/cln_git
+
+#func ./ifio/rem_git
+
+#func ./ifio/search_path
+
+trap rem_git EXIT
 
 chdir="${1:-./}"
 
@@ -22,8 +32,9 @@ chdir="./"
 mnemonic=""
 verbose=0
 quiet=0
-clean=""
+colorize=0
 dump=""
+use=""
 
 while [ $# -gt 0 ]; do
   case "${1}" in
@@ -31,10 +42,11 @@ while [ $# -gt 0 ]; do
     -m|--mnemonic) shift; mnemonic="$(realpath "${1}")"; ;;
     -v|--verbose) verbose=1; ;;
     -q|--quiet) quiet=1; ;;
-    -k|--clean) shift; clean="${1}"; ;;
-    -h|--help) usage; exit; ;;
+    -k|--colorize) colorize=1; ;;
+    -h|--help) _usage; exit; ;;
     -d|--dump) shift; dump="${1}"; ;;
-    *) echo "Unknown option" >&2; usage; exit 2; ;;
+    -u|--use) shift; use="${1}"; ;;
+    *) echo "Unknown option" >&2; _usage; exit 2; ;;
   esac
   shift
 done
@@ -42,7 +54,7 @@ done
 # Check for dump
 if [ ! -z "${dump}" ]; then
   dmpscr="$(which wzk-dumpvars)"
-  env - SOV="set -a" EOV="source ${dmpscr:-./wzk-dumpvars}" "$(_search_path "${dump}")"
+  env - SOV="set -a" EOV="source ${dmpscr:-./wzk-dumpvars}" "$(search_path "${dump}")"
   exit
 fi
 
@@ -52,34 +64,30 @@ fi
 
 cd "${chdir}"
 
+add_git
+
+# If "use" was specified, try it
+if [ ! -z "${use}" ]; then
+  if [ -f "$(search_path "${use}")" ]; then
+    attempt "$(search_path "${use}")" && exit 0  # Exit if successful
+  fi
+fi
+
 # Try to run the cached option
 if [ -f "${mnemonic}" ]; then
   firsttry="$(grep "$(pwd)" "${mnemonic}" | cut -d':' -f2)"
-  if [ ! -z "${firsttry}" -a -f "$(_search_path "${firsttry}")" ]; then
-    attempt "$(_search_path "${firsttry}")"
-    if [ $? -eq 0 ]; then
-      exit 0
-    else
-      if [ ! -z "${clean}" ]; then
-        $clean
-      fi
-    fi
+  if [ ! -z "${firsttry}" -a -f "$(search_path "${firsttry}")" ]; then
+    attempt "$(search_path "${firsttry}")" && exit 0  # Exit if successful
   fi
 fi
 
 # Try all scripts
+echo "${IFIO_PATH} | sed 's/:/\n/g'" | \
 while read dir; do
   for scr in ${dir}/*; do
-    attempt "${scr}"
-    if [ $? -eq 0 ]; then
-      exit 0
-    else
-      if [ ! -z "${clean}" ]; then
-        $clean
-      fi
-    fi
+    attempt "${scr}" && exit 0  # Exit if successful
   done
-done < <(echo "${IFIO_PATH} | sed 's/:/\n/g'")
+done #< <(echo "${IFIO_PATH} | sed 's/:/\n/g'")
 
 ifio_msg "Unable to build with given scripts\n"
 exit 1

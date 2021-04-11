@@ -1,7 +1,45 @@
-if [ $quiet -ne 1 ]; then
-  if [ $verbose -ne 1 ]; then
-    echo -ne "${@}"
-  else
-    echo "${@}" | sed 's/\\r//g;s/\\n//g'
+# ifio_msg <message>
+# ifio_msg [pass|fail|none] <message>
+
+if [ $quiet -eq 1 ]; then
+  return
+fi
+
+CLEAR='\033[0m'
+ORANGE='\033[0;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+
+total_msg="[IFIO] "
+status=''
+msg_color=''
+stat_color=''
+clr_color=''
+
+if [ $colorize -eq 1 ]; then
+  msg_color="${ORANGE}"
+  clr_color="${CLEAR}"
+  if [ $# -eq 2 ]; then
+    case "${1}" in
+      pass) stat_color="${GREEN}"; ;;
+      fail) stat_color="${RED}"; ;;
+    esac
   fi
+fi
+
+if [ $# -eq 2 ]; then
+  case "${1}" in
+    pass) status="${msg_color}[${stat_color}✔${msg_color}]"; ;;
+    fail) status="${msg_color}[${stat_color}✗${msg_color}]"; ;;
+    none) status="${msg_color}[${stat_color} ${msg_color}]"; ;;
+  esac
+  shift
+fi
+
+total_msg="${msg_color}${total_msg}${status} ${1}${clr_color}"
+
+if [ $verbose -ne 1 ]; then
+  printf "${total_msg}\n"
+else
+  printf "${total_msg}" | sed 's/\\r//g'
 fi

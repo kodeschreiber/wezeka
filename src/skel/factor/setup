@@ -1,53 +1,80 @@
 #!/bin/bash
 
-export GITROOT="$(git rev-parse --show-toplevel)"
-export FDIR="${GITROOT}/.factor"
-export CONFIG="${FDIR}/build/config"
-export RC_DIR="${FDIR}/cache"
+if [ ! -d "${GITROOT}" ]; then
+  elog "No git repository found"
+  exit 1
+fi
 
-mkdir -p "${FDIR}/ifio/subroutines" \
-         "${FDIR}/bubbles" \
-         "${FDIR}/cache" \
-         "${FDIR}/pg" \
-         "${FDIR}/modules" \
-         "${FDIR}/build" \
-         "${FDIR}/env" \
-         "${FDIR}/states"
+rm -rf "${EXECDIR}" "${ENVDIR}" "${EXPODIR}"
+mkdir -p "${ENVDIR}" "${EXECDIR}" "${ENTRYDIR}" "${EXPODIR}" "${ENDODIR}" "${CACHEDIR}"
 
-touch "${FDIR}/ifio/mnemoic" \
-      "${FDIR}/build/config"
+rm -f "${CONFIG}"
+touch "${CONFIG}" "${MNEMONIC}"
 
-cat <<EOF >"${FDIR}/build/config"
+cat <<EOF >"${CONFIG}"
 [entry factor_global]
 url=""
 tag=master
-prefix="${GITROOT}"
 env=""
-requires=""
-bubble=""
+endo=""
+exec=""
 EOF
 
-cat <<EOF >"${FDIR}/env/factor_default"
+cat <<EOF >"${ENVDIR}/factor_default"
 GITROOT="${GITROOT}"
-PREFIX="${GITROOT}"
-IFIO_PATH="${FDIR}/ifio/subroutines"
+IFIO_PATH="${EXECDIR}"
+EOF
+
+cat <<EOF >"${ENVDIR}/factor_isolation"
+PATH="${PATH}:${GITROOT}/.factor/bin"
 EOF
 
 find "${GITROOT}" -type f -name "*.ftr" | \
 while read file; do
-  cat "${file}" >> "${FDIR}/build/config"
+  cat "${file}" >> "${CONFIG}"
 done
 
-# Output subroutines
-egrep '\[\s*routine .*\]' "${CONFIG}" | \
-  sed 's/\[\s*routine //;s/\]\s*$//' | \
+# Output execs
+egrep '\[\s*exec .*\]' "${CONFIG}" | \
+  sed 's/\[\s*exec //;s/\]\s*$//' | \
   while read sect; do
-    wzk-sekt -t 'routine' "${CONFIG}" "${sect}" > "${FDIR}/ifio/subroutines/${sect}"
+    wzk-sekt -t 'exec' "${CONFIG}" "${sect}" > "${EXECDIR}/${sect}"
+    chmod +x "${EXECDIR}/${sect}"
   done
 
-# Output environments
+# Output envs
 egrep '\[\s*env .*\]' "${CONFIG}" | \
   sed 's/\[\s*env //;s/\]\s*$//' | \
   while read sect; do
-    wzk-sekt -t 'env' "${CONFIG}" "${sect}" > "${FDIR}/env/${sect}"
+    wzk-sekt -t 'env' "${CONFIG}" "${sect}" > "${ENVDIR}/${sect}"
   done
+
+# Generate entry dirs
+egrep '\[\s*entry .*\]' "${CONFIG}" | \
+  sed 's/\[\s*entry //;s/\]\s*$//' | \
+  while read sect; do
+    mkdir -p "${ENTRYDIR}/${sect}"
+    touch "${ENTRYDIR}/${sect}/state"
+  done
+
+# Output expos
+egrep '\[\s*expo .*\]' "${CONFIG}" | \
+  sed 's/\[\s*expo //;s/\]\s*$//' | \
+  while read sect; do
+    wzk-sekt -t 'expo' "${CONFIG}" "${sect}" > "${EXPODIR}/${sect}"
+  done
+
+# Generate endo dirs
+egrep '\[\s*endo .*\]' "${CONFIG}" | \
+  sed 's/\[\s*endo //;s/\]\s*$//' | \
+  while read sect; do
+    mkdir -p "${ENDODIR}/${sect}"
+  done
+
+# Copy in the BBROOT
+if [ ! -d "${FDIR}/bin" ]; then
+  mkdir -p "${FDIR}/bin"
+  bbtar="$(realpath $(dirname $(which wzk-factor))/../share/wzk/bbroot.tar.gz)"
+  cd "${FDIR}/bin"
+  tar zxf "${bbtar}" -C./
+fi

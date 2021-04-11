@@ -1,0 +1,17 @@
+#!/bin/bash
+
+_usage(){
+cat <<'EOF'
+COLORIZE
+
+Run a script and filter output as follows:
+STDOUT -> White
+STDERR -> Red
+PIPE 3 -> Blue
+
+Usage: colorize CMD ARG1 ... ARGN
+EOF
+}
+
+set -o pipefail
+"$@" 1> >(sed $'s,.*,\e[37m&\e[m,'>&1) 2> >(sed $'s,.*,\e[31m&\e[m,'>&2) 3> >(sed $'s,.*,\e[34m&\e[m,'>&1)

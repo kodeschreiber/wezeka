@@ -7,23 +7,22 @@ sumlist() (
   # Get the entry info
   _getentry "${1}"
 
-  # Get the bubble info
-  bubble="$(_getentry "${1}" | grep '^bubble=')"
-  if [ ! -z "${bubble}" ]; then
-    wzk-sekt -t 'bubble' "${CONFIG}" "${bubble}"
+  # Get the exec info (if available)
+  routine="$(_getentry "${1}" | grep '^\s*exec=')"
+  if [ ! -z "${routine}" -a -f "${FDIR}/exec/${routine}" ]; then
+    cat "${FDIR}/exec/${routine}"
   fi
 
-  # Get the routine info (if available)
-  routine="$(_getentry "${1}" | grep '^routine=')"
-  if [ ! -z "${routine}" -a -f "${FDIR}/ifio/subroutines/${routine}" ]; then
-    cat "${FDIR}/ifio/subroutines/${routine}"
+  # Get the endo info (if available)
+  endo="$(_getentry "${1}" | grep '^\s*endo=')"
+  if [ ! -z "${endo}" ]; then
+    wzk-sekt -e -n -t endo "${CONFIG}" "${endo}"
   fi
 
   # Get the script info (if available)
-  scr="$(grep -qs "modules/${1}:" "${FDIR}/ifio/mnemonic" | cut -d':' -f2-)"
-  if [ ! -z "${scr}" -a -f "${FDIR}/ifio/subroutines/${scr}" ]; then
-    cat "${FDIR}/ifio/subroutines/${scr}"
-  fi
+  #if [ -f "${ENTRYDIR}/${1}/ifio" ]; then
+  #  cat "${ENTRYDIR}/${1}/ifio"
+  #fi
 )
 
 md5sum <(sumlist "${1}") | cut -d' ' -f1

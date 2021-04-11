@@ -1,31 +1,31 @@
 # FACTOR
 ---
-Factor is a build assistant tool designed to make organizing modules and their construction much easier. It is installed as a GIT plugin.
+Factor is a build assistant tool designed to make organizing modules and their construction much easier.
 
-When running the `git factor` command, you must be in the target directory containing these files.
+When running the `wzk factor` command, you must be in the target directory containing your build files.
 
 ---
 
 ## Command Usage:
-git factor OPERATION TARGET1 ... TARGETn  
+git factor OPERATION TARGET FLAGS
 
 OPERATIONS:
-  - build:
-      Firstly ensures that the '.factor' directory exists. Then, ensures the
-      basic directory structure for the module is present. Git submodule is
-      then used to add/update the module. Then, check if the build needs to
-      continue; if the tag or buildscript change, or if the 'cache' directory
-      for the module is missing, then proceed, otherwise, exit 11. Attempt to
-      build each prerequiste. If successful, create cache directory and clean
-      the git module directory. If isolation is not set, set the environment
-      variables and run the buildscript. Otherwise, create a bind-mount for
-      the root and module directories in the cache, chroot into the cache,
-      and execute the buildscript. Absolute paths defined in the PATH and
-      LD_LIBRARY_PATH are converted for the chroot environment. Finally,
-      copy the contents of the cache into the 'prefix' directory.
+  - build <entry> <optional: -f|--force>
+      This performs a build on a specified entry. It checks to see if rebuilding is necessary
+      (which can be overidden with --force). The associated repository is cloned (if specified)
+      and tag checked-out (default is master). Using WZK IFIO, the cloned directory is
+      executed with either the prespecified script or one that IFIO locates. This execution
+      uses the specified environments (see WZK runenv) and endo-container (see WZK isolate).
 
-  - clean:
-      Remove the modules '.factor' directory
+  - refresh
+      Using available FTR files in the project directory, repopulate the .factor directory
+      with up-to-date files. Run this before using 'build' to ensure that scripts, environments,
+      and expos are correct
+
+  - reset
+      Remove all repository caches, IFIO mnemonics, and endo-containers
+
+  - 
 ---
 
 ## Installation
@@ -35,9 +35,7 @@ Here's a simple layout diagram:
 
 Factor only requires a few things:
 1. One or more '<filename>.ftr' files in the git repository
-2. Commands: rsync, git
-
-Simply run `make install` to install the binary. To set a custom path, do `make PREFIX='<path>' install`
+2. Commands: python3, git
 
 ---
 
@@ -45,7 +43,7 @@ Simply run `make install` to install the binary. To set a custom path, do `make 
 FTR files can be located anywhere in your git repository. FTR files are essentially
 `ini` files. In fact, they are desinged the same way that GIT configs are.
 
-There are three types of sections you may use:
+There are five types of sections you may use:
   - entry
   - exec
   - env

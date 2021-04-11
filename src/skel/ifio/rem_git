@@ -1,0 +1,3 @@
+if [ -f .ifio_git ]; then
+  rm -rf .git .ifio_git
+fi

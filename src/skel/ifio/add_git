@@ -1,0 +1,8 @@
+if [ -z "$(which git)" ]; then
+  ifio_msg "Cannot autoclean; not git executable present"
+elif [ ! -d .git ]; then
+  git init .
+  touch .ifio_git
+  git add .
+  git commit -m "IFIO CHECKPOINT"
+fi

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#usage ../../docs/gitclean.skel
+#usage ../../docs/gitclean.md
 
 cd "${1}"
 git reset HEAD --hard

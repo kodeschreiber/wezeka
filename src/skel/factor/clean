@@ -1,28 +1,7 @@
-# clean [-a|-p|-c] entry1 ... entryN
-cache=0
-bubble=0
+if [ ! -d "${ENTRYDIR}/${1}" ]; then
+  elog "No such entry: ${1}"
+  exit 1
+fi
 
-while [ $# -gt 0 ]; do
-  case "${1}" in  
-    -a) rm -rf "${FDIR}/cache" "${FDIR}/modules" "${FDIR}/build"; exit; ;;
-    -p) rm -rf "${FDIR}"; exit; ;;
-    -c) cache=1; ;;
-    -b) bubble=1; ;;
-    *) break; ;;
-  esac
-  shift
-done
-
-while [ $# -gt 0 ]; do
-  if [ $cache -eq 1 ]; then
-    url="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget url)"
-    wzk-repocache remove "${url}"
-  fi
-
-  if [ $bubble -eq 1 ]; then
-    bubble_name="$(wzk-sekt -t 'entry' "${CONFIG}" "${1}" | wzk-dget bubble)"
-    rm -rf "${FDIR}/isolate/bubbles/${bubble_name}"
-  fi
-
-  rm -rf "${FDIR}/modules/${1}" "${FDIR}/build/states/${1}"
-done
+plog "Cleaning ${1}"
+rm -rf "${ENTRYDIR}/${1}"

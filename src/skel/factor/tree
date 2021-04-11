@@ -1,0 +1,17 @@
+set -e
+
+while read req; do
+  wzk-factor build "${req}" "${2}"
+done < <(python3 <(cat <<EOF
+import yaml
+
+def recurse(dicti):
+  for k,v in dicti.items():
+    if isinstance(v, dict):
+      recurse(v)
+    print(k)
+
+with open("${EXPODIR}/${1}", 'r') as file:
+  recurse(yaml.safe_load(file))
+EOF
+) )
