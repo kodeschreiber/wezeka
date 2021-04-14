@@ -25,14 +25,14 @@ OPERATIONS:
   - reset
       Remove all repository caches, IFIO mnemonics, and endo-containers
 
-  - 
+  - clean
+      Remove an enties resources from the .factor directory
+
+  - conduct
+      Run a defined `expo` section
 ---
 
 ## Installation
-Here's a simple layout diagram:  
-
-![factor_diagram](factor.png)
-
 Factor only requires a few things:
 1. One or more '<filename>.ftr' files in the git repository
 2. Commands: python3, git
@@ -47,27 +47,24 @@ There are five types of sections you may use:
   - entry
   - exec
   - env
+  - endo
+  - expo
 
 Meta sections are structured as:
 ```
 [entry name]
   url=
   tag=
-  prefix=
   env=env1 ... envN
-  exec=exec1 ... execN
-  requires=req1 ... reqN
-  noclean=true|false
-  verbose=true|false
-  freeze=true|false
+  exec=exec_ref
+  endo=expo_ref
 ```
 Here are the rules to the CONF file:
 1. `url` should specify the location to the target GIT repository. It is required.
 2. `tag` must be a valid tag in that repository. The default is `master`
-3. `requires` is a space-separated list of other resource names. They will be built first.
+3. `endo` specifies an isolated environment section by the given name
 4. `env` is a space-separated list of section names in the `factor.conf`. Add entries to those sections; this will automatically export shell variables for your build scripts (no need to put 'export')
-5. `prefix` is the final destination of your resource's build. It will given as the variable `PREFIX` in your build script. This value changes if `isolate` is defined. You may also use the `%git%` variable to specify the path your GIT project root.
-6. `script` is the location of the buildscript to execute in the module's directory. The scipt must be set as execuatble. You may use the `%git%` syntax to specifiy the location.
+5. `exec` is the name of the section to execute in the module's directory.
 
 Exec sections are free-form. They should be treated as parts to a script, later combined by reference in the `entry` section. Here's what one could look like:
 ```
@@ -84,8 +81,21 @@ PATH=/bin:/usr/bin
 CUSTOM_VAR=foo
 CC=/usr/bin/gcc
 ```
-
 Note that you do not need to put the `export` keyword. This is done automatically.
+
+Endo sections can have two keys:
+```
+venn=endo1 ... endo2
+bind=dir1 ... dirN
+```
+Venn is a list of other defined endo sections
+Bind is a list of directories to be Read-Only bind mounted to the isolated subroot
+
+Expo sections are formatted as YAMLs. Each key is an entry name (`git factor build` will be ran on it).
+This is designed so that you can list dependencies out for each entry. YAML anchors do work for this,
+and are encouraged to reduce redundancy. In addtion. all enrties must end in a colon, even if they have
+no dependencies
+
 
 There is one reserved section called `factor` used to define global properties for
 your repository. It is not required, but can be used to override default values as
@@ -99,6 +109,5 @@ outlined below:
 ## Build Variables
 The following variables are injected to every buildscript's environment:
 
-- PREFIX_CACHE - Path to the `<gitfolder>/.factor/<module>/cache` directory.
-- PREFIX_BUILD - Path defined by the `prefix` variable in the factor.conf
 - GIT_ROOT - Path to the parent git directories root.
+- IFIO_PATH - This can be appended to, but in general, holds the directory where the exec sections are exported to.
